@@ -21,7 +21,6 @@ final class AddonStore: ObservableObject {
             let savedAddons = try JSONDecoder().decode([AddonManifest].self, from: data)
             addons = savedAddons
         } catch {
-            // Ignore an unreadable saved list instead of preventing the app from opening.
             UserDefaults.standard.removeObject(forKey: storageKey)
         }
     }
@@ -48,7 +47,14 @@ final class AddonStore: ObservableObject {
             guard data.count <= 1_000_000 else {
                 throw AddonError.invalidManifest("Manifest exceeds the 1 MB limit.")
             }
-            let manifest = try JSONDecoder().decode(AddonManifest.self, from: data)
+
+            let manifest: AddonManifest
+            do {
+                manifest = try JSONDecoder().decode(AddonManifest.self, from: data)
+            } catch let decodingError as DecodingError {
+                throw AddonError.invalidManifest(Self.explain(decodingError))
+            }
+
             try manifest.validate()
             guard !addons.contains(where: { $0.id == manifest.id }) else {
                 throw AddonError.duplicate(manifest.name)
@@ -62,6 +68,21 @@ final class AddonStore: ObservableObject {
 
     func remove(_ addon: AddonManifest) {
         addons.removeAll { $0.id == addon.id }
+    }
+
+    private static func explain(_ error: DecodingError) -> String {
+        switch error {
+        case .keyNotFound(let key, _):
+            return "This JSON is missing the required field '\(key.stringValue)'. This URL may be for a different add-on format. Shinji currently expects its own manifest format."
+        case .typeMismatch(let type, let context):
+            return "The field '\(context.codingPath.last?.stringValue ?? "unknown")' has the wrong type (expected \(type)). Check that this is a Shinji-compatible JSON manifest."
+        case .valueNotFound(_, let context):
+            return "The value for '\(context.codingPath.last?.stringValue ?? "unknown")' is missing. Check that this is a Shinji-compatible JSON manifest."
+        case .dataCorrupted:
+            return "The server response is not valid JSON. Make sure the URL points directly to a JSON manifest."
+        @unknown default:
+            return "The JSON format is not supported. Make sure the URL points to a Shinji-compatible manifest."
+        }
     }
 
     private func saveAddons() {
