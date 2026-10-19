@@ -226,7 +226,14 @@ struct PlayerView: View {
         isPreparingPlayback = true
         PlaybackAudio.configureToMixWithOtherAudio()
 
-        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+        // AVURLAssetHTTPHeaderFieldsKey is undocumented and not supported by Apple.
+        // Keep the existing add-on headers for compatibility with current sources, but
+        // also set the user agent through AVFoundation's supported option.
+        var assetOptions: [String: Any] = ["AVURLAssetHTTPHeaderFieldsKey": headers]
+        assetOptions["AVURLAssetHTTPUserAgentKey"] = headers.first(where: {
+            $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame
+        })?.value ?? "Shinji/1.0"
+        let asset = AVURLAsset(url: url, options: assetOptions)
         let item = AVPlayerItem(asset: asset)
         // Let AVPlayer choose a suitable startup buffer and wait strategy.
         // Forcing a tiny buffer and disabling stall minimization can cause
