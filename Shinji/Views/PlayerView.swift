@@ -18,9 +18,14 @@ struct PlayerView: View {
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "arrow.up.forward.app").font(.system(size: 42)).foregroundStyle(.secondary)
-                    Text("Opening \\(preferredPlayer)…").font(.headline)
+                    Text("Opening \(preferredPlayer)…").font(.headline)
                     Text("Shinji is handing this stream to your selected player.").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     Button("Try again") { openExternalPlayer() }.buttonStyle(.bordered)
+                    Button("Play in Shinji") {
+                        preferredPlayer = "Shinji"
+                        externalLaunchFailed = false
+                        startInternalPlayback()
+                    }.buttonStyle(.borderedProminent)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).padding()
             }
             HStack {
@@ -74,7 +79,7 @@ struct PlayerView: View {
             components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString)]
             target = components.url
         case "Outplayer":
-            target = URL(string: "outplayer://\\(url.absoluteString)")
+            target = URL(string: "outplayer://\(url.absoluteString)")
         default:
             target = nil
         }
