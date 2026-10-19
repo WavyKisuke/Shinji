@@ -1,6 +1,12 @@
 import Foundation
 import Combine
 
+struct AddonStreamOption: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let url: URL
+}
+
 struct AddonCatalogItem: Identifiable, Hashable {
     let id: String
     let type: String
@@ -24,6 +30,8 @@ final class AddonStore: ObservableObject {
         didSet { saveAddons() }
     }
     @Published private(set) var catalogItems: [AddonCatalogItem] = []
+    @Published private(set) var streamOptions: [AddonStreamOption] = []
+    @Published var streamStatus: String?
     @Published var statusMessage: String?
     @Published var catalogStatus: String?
 
@@ -97,6 +105,44 @@ final class AddonStore: ObservableObject {
         } else {
             catalogStatus = "Catalogs were found, but no titles could be loaded. The source may require authentication or use an unsupported response."
         }
+    }
+
+    func loadStreams(for item: AddonCatalogItem) async {
+        streamOptions = []
+        streamStatus = "Looking for available streams…"
+        guard let addon = addons.first(where: { $0.name == item.addonName }),
+              let manifestURL = addon.manifestURL,
+              addon.format == "Stremio",
+              let url = streamURL(base: manifestURL, item: item) else {
+            streamStatus = "This add-on does not expose a compatible Stremio stream endpoint."
+            return
+        }
+        do {
+            let data = try await fetchJSON(from: url)
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let streams = json?["streams"] as? [[String: Any]] ?? []
+            streamOptions = streams.compactMap { stream in
+                guard let rawURL = stream["url"] as? String,
+                      let streamURL = URL(string: rawURL),
+                      ["https", "http"].contains(streamURL.scheme?.lowercased() ?? ""),
+                      streamURL.host != nil else { return nil }
+                let title = (stream["title"] as? String) ?? (stream["name"] as? String) ?? "Stream"
+                return AddonStreamOption(id: rawURL, title: title, url: streamURL)
+            }
+            streamStatus = streamOptions.isEmpty
+                ? "No direct playable streams were returned. This source may require a supported player resource or authentication."
+                : "Choose a stream to play."
+        } catch {
+            streamStatus = "Could not retrieve streams from this source. It may require authentication or use an unsupported endpoint."
+        }
+    }
+
+    private func streamURL(base: URL, item: AddonCatalogItem) -> URL? {
+        guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        let type = item.type.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.type
+        let id = item.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.id
+        components.path = "/stream/\(type)/\(id).json"
+        return components.url
     }
 
     func remove(_ addon: AddonManifest) {
