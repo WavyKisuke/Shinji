@@ -5,6 +5,7 @@ struct AddonStreamOption: Identifiable, Hashable {
     let id: String
     let title: String
     let url: URL
+    let headers: [String: String]
 }
 
 struct AddonCatalogItem: Identifiable, Hashable {
@@ -142,9 +143,20 @@ final class AddonStore: ObservableObject {
                     let streamTitle = (stream["title"] as? String)
                         ?? (stream["name"] as? String)
                         ?? addon.name
+                    let behaviorHints = stream["behaviorHints"] as? [String: Any]
+                    let proxyHeaders = behaviorHints?["proxyHeaders"] as? [String: Any]
+                    let requestInfo = proxyHeaders?["request"] as? [String: Any]
+                    let suppliedHeaders = (requestInfo?["headers"] as? [String: String])
+                        ?? (stream["headers"] as? [String: String])
+                        ?? [:]
                     let optionID = "\(addon.id)|\(rawURL)"
                     if !found.contains(where: { $0.id == optionID }) {
-                        found.append(AddonStreamOption(id: optionID, title: "\(streamTitle) · \(addon.name)", url: parsedURL))
+                        found.append(AddonStreamOption(
+                            id: optionID,
+                            title: "\(streamTitle) · \(addon.name)",
+                            url: parsedURL,
+                            headers: suppliedHeaders
+                        ))
                     }
                 }
             } catch {
