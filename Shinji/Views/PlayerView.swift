@@ -185,6 +185,11 @@ struct PlayerView: View {
 
         let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
         let item = AVPlayerItem(asset: asset)
+        // Start rendering as soon as a small buffer is available instead of
+        // waiting for AVPlayer's larger anti-stall buffer. This improves
+        // startup latency for supported direct streams; unstable streams may stall more.
+        item.preferredForwardBufferDuration = 1.0
+        player.automaticallyWaitsToMinimizeStalling = false
         itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { observedItem, _ in
             DispatchQueue.main.async {
                 guard player.currentItem === observedItem else { return }
