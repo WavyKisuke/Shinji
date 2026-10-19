@@ -84,9 +84,16 @@ struct MPVPlayerSurface: UIViewRepresentable {
 
         private func issue(_ arguments: [String]) {
             guard let mpv else { return }
-            var pointers: [UnsafeMutablePointer<CChar>?] = arguments.map { strdup($0) }
+            var pointers: [UnsafePointer<CChar>?] = arguments.map { value in
+                guard let pointer = strdup(value) else { return nil }
+                return UnsafePointer(pointer)
+            }
             pointers.append(nil)
-            defer { for pointer in pointers { if let pointer { free(pointer) } } }
+            defer {
+                for pointer in pointers {
+                    if let pointer { free(UnsafeMutablePointer(mutating: pointer)) }
+                }
+            }
             let result = pointers.withUnsafeMutableBufferPointer { buffer in
                 mpv_command(mpv, buffer.baseAddress)
             }
@@ -125,7 +132,11 @@ struct MPVPlayerSurface: UIViewRepresentable {
         func shutdown() {
             guard let handle = mpv else { return }
             mpv = nil
-            _ = mpv_command(handle, [strdup("stop"), nil])
+            var stopCommand: [UnsafePointer<CChar>?] = ["stop".withCString { strdup($0).map(UnsafePointer.init) }, nil]
+            _ = stopCommand.withUnsafeMutableBufferPointer { buffer in
+                mpv_command(handle, buffer.baseAddress)
+            }
+            if let pointer = stopCommand[0] { free(UnsafeMutablePointer(mutating: pointer)) }
             mpv_terminate_destroy(handle)
         }
     }
