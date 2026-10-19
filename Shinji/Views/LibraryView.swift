@@ -535,7 +535,7 @@ struct LibraryView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 13) {
-                        ForEach(Array(items.prefix(18).enumerated()), id: \\.offset) { _, item in
+                        ForEach(Array(items.prefix(18).enumerated()), id: \.offset) { _, item in
                             Button {
                                 selectedItem = item
                             } label: {
