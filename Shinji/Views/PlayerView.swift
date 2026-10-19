@@ -226,8 +226,7 @@ struct PlayerView: View {
         }
 
         let uniqueDetails = Array(NSOrderedSet(array: details)) as? [String] ?? details
-        return uniqueDetails.isEmpty ? fallback : uniqueDetails.joined(separator: "
-")
+        return uniqueDetails.isEmpty ? fallback : uniqueDetails.joined(separator: "\n")
     }
 
 
