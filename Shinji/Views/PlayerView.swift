@@ -172,9 +172,11 @@ struct PlayerView: View {
             details.append("\(error.localizedDescription) (\(error.domain) \(error.code))")
         }
 
+        var httpStatus: Int?
         if let event = item.errorLog()?.events.last {
             let status = event.errorStatusCode
             if status > 0 {
+                httpStatus = status
                 details.append("HTTP status \(status)")
             }
             let domain = event.errorDomain
@@ -183,6 +185,21 @@ struct PlayerView: View {
             }
             if let comment = event.errorComment, !comment.isEmpty {
                 details.append(comment)
+            }
+        }
+
+        if let httpStatus {
+            switch httpStatus {
+            case 401, 403:
+                details.append("The source denied access. Its authorization, cookies, or required request headers may be missing or expired.")
+            case 404, 410:
+                details.append("The stream URL may have expired or the source no longer has this file. Try requesting a fresh source.")
+            case 408, 429:
+                details.append("The source timed out or rate-limited the request. Wait briefly and retry.")
+            case 500...599:
+                details.append("The source server reported a failure. Try another source or retry later.")
+            default:
+                break
             }
         }
 
