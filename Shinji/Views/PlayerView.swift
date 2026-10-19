@@ -19,6 +19,7 @@ struct PlayerView: View {
             if preferredPlayer == "Shinji" || externalLaunchFailed {
                 VStack(spacing: 10) {
                     VideoPlayer(player: player)
+                        .frame(maxWidth: .infinity)
                         .aspectRatio(16.0 / 9.0, contentMode: .fit)
                         .background(.black)
                         .overlay {
@@ -170,11 +171,15 @@ struct PlayerView: View {
         let item = AVPlayerItem(asset: asset)
         itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { observedItem, _ in
             DispatchQueue.main.async {
+                guard player.currentItem === observedItem else { return }
                 switch observedItem.status {
                 case .readyToPlay:
                     playbackError = nil
                     isPreparingPlayback = false
                     player.play()
+                    if player.timeControlStatus == .paused {
+                        player.playImmediately(atRate: 1.0)
+                    }
                 case .failed:
                     isPreparingPlayback = false
                     playbackError = observedItem.error?.localizedDescription
@@ -188,8 +193,7 @@ struct PlayerView: View {
             }
         }
         player.replaceCurrentItem(with: item)
-        // Wait for AVFoundation to confirm the item is ready before starting playback.
-        player.pause()
+        // The status observer starts playback once AVFoundation confirms readiness.
     }
 
     private func openExternalPlayer() {
