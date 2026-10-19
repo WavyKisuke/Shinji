@@ -7,6 +7,7 @@ struct PlayerView: View {
     var headers: [String: String] = [:]
     @State private var player = AVPlayer()
     @State private var isMuted = false
+    @State private var isFullscreen = false
     @State private var externalLaunchFailed = false
     @State private var playbackError: String?
     @State private var isPreparingPlayback = false
@@ -20,6 +21,17 @@ struct PlayerView: View {
                     VideoPlayer(player: player)
                         .aspectRatio(16.0 / 9.0, contentMode: .fit)
                         .background(.black)
+                        .overlay(alignment: .topTrailing) {
+                            Button { isFullscreen = true } label: {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .padding(10)
+                                    .background(.black.opacity(0.65), in: Circle())
+                            }
+                            .accessibilityLabel("Enter full screen")
+                            .padding(10)
+                        }
                     if isPreparingPlayback {
                         ProgressView("Loading stream…")
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -58,6 +70,22 @@ struct PlayerView: View {
                     Text("Playback").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                if preferredPlayer == "Shinji" || externalLaunchFailed {
+                    Menu {
+                        Button { selectAudioTrack(nil) } label: {
+                            Label("No audio", systemImage: "speaker.slash")
+                        }
+                        if let group = audibleGroup {
+                            ForEach(group.options, id: \.self) { option in
+                                Button(option.displayName) { selectAudioTrack(option) }
+                            }
+                        }
+                    } label: {
+                        Label("Audio", systemImage: "waveform")
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Choose audio track")
+                }
                 Button {
                     isMuted.toggle()
                     player.isMuted = isMuted
@@ -71,6 +99,22 @@ struct PlayerView: View {
             Spacer()
             Text("Playback depends on the source format and access permissions.")
                 .font(.footnote).foregroundStyle(.secondary).padding()
+        }
+        .fullScreenCover(isPresented: $isFullscreen) {
+            ZStack(alignment: .topTrailing) {
+                Color.black.ignoresSafeArea()
+                VideoPlayer(player: player).ignoresSafeArea()
+                Button { isFullscreen = false } label: {
+                    Image(systemName: "arrow.down.right.and.arrow.up.left")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .background(.black.opacity(0.7), in: Circle())
+                }
+                .accessibilityLabel("Exit full screen")
+                .padding()
+            }
+            .preferredColorScheme(.dark)
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -93,6 +137,16 @@ struct PlayerView: View {
             isPreparingPlayback = false
         }
     }
+    private var audibleGroup: AVMediaSelectionGroup? {
+        player.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .audible)
+    }
+
+    private func selectAudioTrack(_ option: AVMediaSelectionOption?) {
+        guard let item = player.currentItem,
+              let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) else { return }
+        item.select(option, in: group)
+    }
+
     private func startInternalPlayback() {
         itemStatusObservation?.invalidate()
         playbackError = nil
