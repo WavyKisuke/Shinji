@@ -7,14 +7,37 @@ struct PlayerView: View {
     @State private var player = AVPlayer()
     @State private var isMuted = false
     @State private var externalLaunchFailed = false
+    @State private var playbackError: String?
+    @State private var isPreparingPlayback = false
+    @State private var itemStatusObservation: NSKeyValueObservation?
     @AppStorage("shinjiPreferredPlayer") private var preferredPlayer = "Shinji"
 
     var body: some View {
         VStack(spacing: 14) {
             if preferredPlayer == "Shinji" || externalLaunchFailed {
-                VideoPlayer(player: player)
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                    .background(.black)
+                VStack(spacing: 10) {
+                    VideoPlayer(player: player)
+                        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                        .background(.black)
+                    if isPreparingPlayback {
+                        ProgressView("Loading stream…")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                    }
+                    if let playbackError {
+                        Text(playbackError)
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                        Button {
+                            startInternalPlayback()
+                        } label: {
+                            Label("Retry playback", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "arrow.up.forward.app").font(.system(size: 42)).foregroundStyle(.secondary)
@@ -58,13 +81,44 @@ struct PlayerView: View {
             }
         }
         .onDisappear {
+            itemStatusObservation?.invalidate()
+            itemStatusObservation = nil
             player.pause()
             player.replaceCurrentItem(with: nil)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemPlaybackStalled)) { notification in
+            guard let item = notification.object as? AVPlayerItem, item === player.currentItem else { return }
+            playbackError = "Playback stalled. The source may be slow, offline, or require additional access."
+            isPreparingPlayback = false
+        }
     }
     private func startInternalPlayback() {
+        itemStatusObservation?.invalidate()
+        playbackError = nil
+        isPreparingPlayback = true
         PlaybackAudio.configureToMixWithOtherAudio()
-        player.replaceCurrentItem(with: AVPlayerItem(url: url))
+
+        let item = AVPlayerItem(url: url)
+        itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { observedItem, _ in
+            DispatchQueue.main.async {
+                switch observedItem.status {
+                case .readyToPlay:
+                    playbackError = nil
+                    isPreparingPlayback = false
+                    player.play()
+                case .failed:
+                    isPreparingPlayback = false
+                    playbackError = observedItem.error?.localizedDescription
+                        ?? "This stream could not be played. It may require headers, authentication, or a different player."
+                case .unknown:
+                    isPreparingPlayback = true
+                @unknown default:
+                    isPreparingPlayback = false
+                    playbackError = "The stream returned an unknown playback state."
+                }
+            }
+        }
+        player.replaceCurrentItem(with: item)
         player.play()
     }
 
