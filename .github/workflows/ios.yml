@@ -2,7 +2,7 @@ name: Build unsigned IPA
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, feature/player-fullscreen-audio-track]
   workflow_dispatch:
 
 permissions:
