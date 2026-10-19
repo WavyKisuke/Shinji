@@ -63,11 +63,6 @@ struct MPVPlayerSurface: UIViewRepresentable {
                 ("http-reconnect", "yes"), ("cache", "yes")
             ]
             for (key, value) in options { _ = mpv_set_option_string(handle, key, value) }
-            let safeHeaders = headers.filter { !$0.key.contains("\r") && !$0.key.contains("\n") && !$0.value.contains("\r") && !$0.value.contains("\n") }
-            if !safeHeaders.isEmpty {
-                let fields = safeHeaders.map { "\($0.key): \($0.value)" }.joined(separator: ",")
-                _ = mpv_set_option_string(handle, "http-header-fields", fields)
-            }
             let initResult = mpv_initialize(handle)
             guard initResult >= 0 else {
                 let message = String(cString: mpv_error_string(initResult))
@@ -76,6 +71,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
                 mpv = nil
                 return
             }
+            applyRequestHeaders(headers, to: handle)
             setMuted(muted)
             DispatchQueue.main.async { self.onStatus?("MPV initialized; waiting for video surface…") }
             view.onReadyForPlayback = { [weak self] in
@@ -107,6 +103,23 @@ struct MPVPlayerSurface: UIViewRepresentable {
                 let message = String(cString: mpv_error_string(result))
                 DispatchQueue.main.async { self.onError?("MPV command failed: \(message)") }
             }
+        }
+
+        private func applyRequestHeaders(_ headers: [String: String], to handle: OpaquePointer) {
+            let safeHeaders = headers.filter {
+                !$0.key.contains("\r") && !$0.key.contains("\n") &&
+                !$0.value.contains("\r") && !$0.value.contains("\n")
+            }
+            let fields = safeHeaders
+                .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+                .map { key, value in
+                    let escapedValue = value
+                        .replacingOccurrences(of: "\\", with: "\\\\")
+                        .replacingOccurrences(of: ",", with: "\\,")
+                    return "\(key): \(escapedValue)"
+                }
+                .joined(separator: ",")
+            _ = mpv_set_property_string(handle, "http-header-fields", fields)
         }
 
         func setMuted(_ muted: Bool) {
