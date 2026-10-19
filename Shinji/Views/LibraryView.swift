@@ -132,9 +132,21 @@ struct LibraryView: View {
                         if let status = addonStore.streamStatus {
                             Text(status).font(.footnote).foregroundStyle(.secondary)
                         }
-                        if addonStore.streamOptions.isEmpty {
+                        if addonStore.isLoadingStreams {
                             ProgressView("Checking source…")
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                        } else if addonStore.streamOptions.isEmpty {
+                            if let status = addonStore.streamStatus {
+                                Text(status)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Button {
+                                Task { await addonStore.loadStreams(for: item) }
+                            } label: {
+                                Label("Retry", systemImage: "arrow.clockwise")
+                            }
+                            .buttonStyle(.bordered)
                         } else {
                             ForEach(addonStore.streamOptions) { option in
                                 Button {
