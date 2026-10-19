@@ -382,8 +382,6 @@ struct LibraryView: View {
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 guard let catalogItem = addonStore.catalogItems.first(where: { $0.id == item.id && $0.addonName == item.subtitle }) else { return }
-                                addonStore.streamStatus = nil
-                                addonStore.streamOptions = []
                                 selectedItem = catalogItem
                             }
                         }
