@@ -58,6 +58,8 @@ struct LibraryView: View {
     @State private var selectedItem: AddonCatalogItem?
     @State private var selectedStreamURL: URL?
     @State private var selectedFilter = "For You"
+    @State private var selectedGenre = "All Genres"
+    @State private var selectedType = "All Types"
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
     @AppStorage("shinjiGlowHex") private var glowHex = "4936FF"
 
@@ -104,8 +106,28 @@ struct LibraryView: View {
     }
 
     private var visibleItems: [ShowcaseItem] {
-        guard !searchText.isEmpty else { return items }
-        return items.filter { $0.title.localizedCaseInsensitiveContains(searchText) || $0.subtitle.localizedCaseInsensitiveContains(searchText) }
+        var result = items
+        if !searchText.isEmpty {
+            result = result.filter { $0.title.localizedCaseInsensitiveContains(searchText) || $0.subtitle.localizedCaseInsensitiveContains(searchText) }
+        }
+        if selectedType != "All Types" {
+            result = result.filter { item in
+                guard let catalog = addonStore.catalogItems.first(where: { $0.id == item.id && $0.addonName == item.subtitle }) else { return false }
+                switch selectedType {
+                case "Movies": return catalog.type == "movie"
+                case "Shows": return catalog.type == "series"
+                case "Live TV": return ["channel", "tv", "live"].contains(catalog.type.lowercased())
+                default: return true
+                }
+            }
+        }
+        if selectedGenre != "All Genres" {
+            result = result.filter { item in
+                let description = addonStore.catalogItems.first(where: { $0.id == item.id })?.description ?? ""
+                return (item.title + " " + description).localizedCaseInsensitiveContains(selectedGenre)
+            }
+        }
+        return result
     }
 
     var body: some View {
@@ -345,7 +367,9 @@ struct LibraryView: View {
             Button {
                 selectedStreamURL = option.url
                 selectedItem = nil
-                showPlayer = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showPlayer = true
+                }
             } label: {
                 Image(systemName: "play.fill")
                     .font(.system(size: 17, weight: .bold))
@@ -489,6 +513,28 @@ struct LibraryView: View {
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
+                Menu {
+                    ForEach(["All Genres", "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Fantasy", "Horror", "Romance", "Sci-Fi", "Thriller"], id: \.self) { genre in
+                        Button(genre) { selectedGenre = genre }
+                    }
+                } label: {
+                    Label(selectedGenre == "All Genres" ? "Genre" : selectedGenre, systemImage: "theatermasks")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 13).padding(.vertical, 9)
+                        .background(Color.white.opacity(0.10), in: Capsule())
+                }
+                Menu {
+                    ForEach(["All Types", "Movies", "Shows", "Live TV"], id: \.self) { type in
+                        Button(type) { selectedType = type }
+                    }
+                } label: {
+                    Label(selectedType == "All Types" ? "Type" : selectedType, systemImage: "line.3.horizontal.decrease")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 13).padding(.vertical, 9)
+                        .background(Color.white.opacity(0.10), in: Capsule())
+                }
                 ForEach(filters, id: \.self) { filter in
                     Button {
                         withAnimation(.easeInOut(duration: 0.18)) { selectedFilter = filter }
