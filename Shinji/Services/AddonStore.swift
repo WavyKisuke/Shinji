@@ -111,32 +111,54 @@ final class AddonStore: ObservableObject {
     func loadStreams(for item: AddonCatalogItem) async {
         streamOptions = []
         isLoadingStreams = true
-        streamStatus = "Looking for available streams…"
+        streamStatus = "Searching installed add-ons for streams…"
         defer { isLoadingStreams = false }
-        guard let addon = addons.first(where: { $0.name == item.addonName }),
-              let manifestURL = addon.manifestURL,
-              addon.format == "Stremio",
-              let url = streamURL(base: manifestURL, item: item) else {
-            streamStatus = "This add-on does not expose a compatible Stremio stream endpoint."
+
+        // A catalog provider often supplies metadata only. Search every installed
+        // Stremio add-on rather than assuming the provider that listed the title
+        // also provides playable streams.
+        let candidates = addons.filter { $0.format == "Stremio" && $0.manifestURL != nil }
+        guard !candidates.isEmpty else {
+            streamStatus = "Install a Stremio add-on that provides stream sources to play this title."
             return
         }
-        do {
-            let data = try await fetchJSON(from: url)
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let streams = json?["streams"] as? [[String: Any]] ?? []
-            streamOptions = streams.compactMap { stream in
-                guard let rawURL = stream["url"] as? String,
-                      let streamURL = URL(string: rawURL),
-                      ["https", "http"].contains(streamURL.scheme?.lowercased() ?? ""),
-                      streamURL.host != nil else { return nil }
-                let title = (stream["title"] as? String) ?? (stream["name"] as? String) ?? "Stream"
-                return AddonStreamOption(id: rawURL, title: title, url: streamURL)
+
+        var found: [AddonStreamOption] = []
+        var attempted = 0
+        for addon in candidates {
+            guard let manifestURL = addon.manifestURL,
+                  let url = streamURL(base: manifestURL, item: item) else { continue }
+            attempted += 1
+            do {
+                let data = try await fetchJSON(from: url)
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let streams = json["streams"] as? [[String: Any]] else { continue }
+
+                for stream in streams {
+                    guard let rawURL = stream["url"] as? String,
+                          let parsedURL = URL(string: rawURL),
+                          ["https", "http"].contains(parsedURL.scheme?.lowercased() ?? ""),
+                          parsedURL.host != nil else { continue }
+                    let streamTitle = (stream["title"] as? String)
+                        ?? (stream["name"] as? String)
+                        ?? addon.name
+                    let optionID = "\(addon.id)|\(rawURL)"
+                    if !found.contains(where: { $0.id == optionID }) {
+                        found.append(AddonStreamOption(id: optionID, title: "\(streamTitle) · \(addon.name)", url: parsedURL))
+                    }
+                }
+            } catch {
+                // One add-on may be offline, private, or catalog-only. Keep trying others.
             }
-            streamStatus = streamOptions.isEmpty
-                ? "No direct playable streams were returned. This source may require a supported player resource or authentication."
-                : "Choose a stream to play."
-        } catch {
-            streamStatus = "Could not retrieve streams from this source. It may require authentication or use an unsupported endpoint."
+        }
+
+        streamOptions = found
+        if !found.isEmpty {
+            streamStatus = "Found \(found.count) playable stream(s) from installed add-ons."
+        } else if attempted == 0 {
+            streamStatus = "No installed add-ons expose a compatible stream endpoint."
+        } else {
+            streamStatus = "No direct playable streams were returned. The installed sources may be catalog-only, require authentication, or provide unsupported stream types."
         }
     }
 
