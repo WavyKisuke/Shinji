@@ -5,7 +5,8 @@ struct PlayerView: View {
     let url: URL
     let title: String
     var headers: [String: String] = [:]
-    @State private var player = AVPlayer()\n    @State private var mpvReloadID = UUID()
+    @State private var player = AVPlayer()
+    @State private var mpvReloadID = UUID()
     @State private var isMuted = false
     @State private var isFullscreen = false
     @State private var externalLaunchFailed = false
@@ -128,7 +129,13 @@ struct PlayerView: View {
         .fullScreenCover(isPresented: $isFullscreen) {
             ZStack(alignment: .topTrailing) {
                 Color.black.ignoresSafeArea()
-                MPVPlayerSurface(url: url, headers: headers, muted: isMuted, onStatus: { status in\n                    playbackDiagnostics = status\n                    isPreparingPlayback = false\n                }, onError: { error in\n                    playbackError = error\n                    isPreparingPlayback = false\n                }).id(mpvReloadID).ignoresSafeArea()
+                MPVPlayerSurface(url: url, headers: headers, muted: isMuted, onStatus: { status in
+                    playbackDiagnostics = status
+                    isPreparingPlayback = false
+                }, onError: { error in
+                    playbackError = error
+                    isPreparingPlayback = false
+                }).id(mpvReloadID).ignoresSafeArea()
                 Button { isFullscreen = false } label: {
                     Image(systemName: "arrow.down.right.and.arrow.up.left")
                         .font(.headline)
@@ -219,7 +226,8 @@ struct PlayerView: View {
         }
 
         let uniqueDetails = Array(NSOrderedSet(array: details)) as? [String] ?? details
-        return uniqueDetails.isEmpty ? fallback : uniqueDetails.joined(separator: "\n")
+        return uniqueDetails.isEmpty ? fallback : uniqueDetails.joined(separator: "
+")
     }
 
 
