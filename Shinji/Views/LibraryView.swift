@@ -247,7 +247,7 @@ struct LibraryView: View {
                 if let url = selectedStreamURL ?? URL(string: streamURL),
                    ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
                    url.host != nil {
-                    PlayerView(url: url, title: selectedStreamURL == nil ? "Stream" : "Selected title")
+                    PlayerView(url: url, title: selectedStreamURL == nil ? "Stream" : "Selected title", headers: addonStore.streamOptions.first(where: { $0.url == url })?.headers ?? [:])
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle")
