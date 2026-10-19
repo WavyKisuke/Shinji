@@ -158,12 +158,36 @@ struct PlayerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemFailedToPlayToEndTime)) { notification in
             guard let item = notification.object as? AVPlayerItem, item === player.currentItem else { return }
-            playbackError = (notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
-                ?? item.error?.localizedDescription
-                ?? "The stream stopped unexpectedly or uses a format iOS can't play."
+            playbackError = playbackFailureMessage(for: item,
+                fallback: (notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
+                    ?? "The stream stopped unexpectedly or uses a format iOS can't play.")
             isPreparingPlayback = false
         }
     }
+    /// Combines AVFoundation's error with its HTTP/transport error log so the
+    /// UI can distinguish common cases such as 401/403, 404, and media failures.
+    private func playbackFailureMessage(for item: AVPlayerItem, fallback: String) -> String {
+        var details: [String] = []
+        if let error = item.error as NSError? {
+            details.append("\(error.localizedDescription) (\(error.domain) \(error.code))")
+        }
+
+        if let event = item.errorLog()?.events.last {
+            if let status = event.errorStatusCode, status > 0 {
+                details.append("HTTP status \(status)")
+            }
+            if let domain = event.errorDomain, !domain.isEmpty {
+                details.append("Network error domain: \(domain)")
+            }
+            if let comment = event.errorComment, !comment.isEmpty {
+                details.append(comment)
+            }
+        }
+
+        let uniqueDetails = Array(NSOrderedSet(array: details)) as? [String] ?? details
+        return uniqueDetails.isEmpty ? fallback : uniqueDetails.joined(separator: "\n")
+    }
+
     private var audibleGroup: AVMediaSelectionGroup? {
         player.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .audible)
     }
@@ -185,11 +209,11 @@ struct PlayerView: View {
 
         let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
         let item = AVPlayerItem(asset: asset)
-        // Start rendering as soon as a small buffer is available instead of
-        // waiting for AVPlayer's larger anti-stall buffer. This improves
-        // startup latency for supported direct streams; unstable streams may stall more.
-        item.preferredForwardBufferDuration = 1.0
-        player.automaticallyWaitsToMinimizeStalling = false
+        // Let AVPlayer choose a suitable startup buffer and wait strategy.
+        // Forcing a tiny buffer and disabling stall minimization can cause
+        // unstable add-on streams to repeatedly stop after starting.
+        item.preferredForwardBufferDuration = 0
+        player.automaticallyWaitsToMinimizeStalling = true
         itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { observedItem, _ in
             DispatchQueue.main.async {
                 guard player.currentItem === observedItem else { return }
@@ -202,8 +226,8 @@ struct PlayerView: View {
                 case .failed:
                     isPreparingPlayback = false
                     playbackDiagnostics = "The stream failed before playback."
-                    playbackError = observedItem.error?.localizedDescription
-                        ?? "This stream could not be played. It may require headers, authentication, or a different player."
+                    playbackError = playbackFailureMessage(for: observedItem,
+                        fallback: "This stream could not be played. It may require headers, authentication, or a different player.")
                 case .unknown:
                     isPreparingPlayback = true
                 @unknown default:
