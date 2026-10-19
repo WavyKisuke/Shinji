@@ -5,7 +5,7 @@ struct PlayerView: View {
     let url: URL
     let title: String
     var headers: [String: String] = [:]
-    @State private var player = AVPlayer()
+    @State private var player = AVPlayer()\n    @State private var mpvReloadID = UUID()
     @State private var isMuted = false
     @State private var isFullscreen = false
     @State private var externalLaunchFailed = false
@@ -128,7 +128,7 @@ struct PlayerView: View {
         .fullScreenCover(isPresented: $isFullscreen) {
             ZStack(alignment: .topTrailing) {
                 Color.black.ignoresSafeArea()
-                VideoPlayer(player: player).ignoresSafeArea()
+                MPVPlayerSurface(url: url, headers: headers, muted: isMuted, onStatus: { status in\n                    playbackDiagnostics = status\n                    isPreparingPlayback = false\n                }, onError: { error in\n                    playbackError = error\n                    isPreparingPlayback = false\n                }).id(mpvReloadID).ignoresSafeArea()
                 Button { isFullscreen = false } label: {
                     Image(systemName: "arrow.down.right.and.arrow.up.left")
                         .font(.headline)
@@ -253,97 +253,13 @@ struct PlayerView: View {
     }
 
     private func startInternalPlayback() {
-        itemStatusObservation?.invalidate()
-        presentationSizeObservation?.invalidate()
-        timeControlObservation?.invalidate()
+        // Recreate the libmpv surface to retry without falling back to AVPlayer.
         playbackError = nil
-        playbackDiagnostics = "Preparing stream…"
+        playbackDiagnostics = "Starting MPV playback…"
         isPreparingPlayback = true
+        externalLaunchFailed = false
+        mpvReloadID = UUID()
         PlaybackAudio.configureToMixWithOtherAudio()
-
-        // AVURLAssetHTTPHeaderFieldsKey is undocumented and not supported by Apple.
-        // Keep the existing add-on headers for compatibility with current sources, but
-        // also set the user agent through AVFoundation's supported option.
-        var assetOptions: [String: Any] = ["AVURLAssetHTTPHeaderFieldsKey": headers]
-        assetOptions["AVURLAssetHTTPUserAgentKey"] = headers.first(where: {
-            $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame
-        })?.value ?? "Shinji/1.0"
-        let asset = AVURLAsset(url: url, options: assetOptions)
-        let item = AVPlayerItem(asset: asset)
-        // Let AVPlayer choose a suitable startup buffer and wait strategy.
-        // Forcing a tiny buffer and disabling stall minimization can cause
-        // unstable add-on streams to repeatedly stop after starting.
-        item.preferredForwardBufferDuration = 0
-        player.automaticallyWaitsToMinimizeStalling = true
-        itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { observedItem, _ in
-            DispatchQueue.main.async {
-                guard player.currentItem === observedItem else { return }
-                switch observedItem.status {
-                case .readyToPlay:
-                    playbackError = nil
-                    isPreparingPlayback = false
-                    playbackDiagnostics = "Stream is ready; waiting for video frames."
-                    player.play()
-                case .failed:
-                    isPreparingPlayback = false
-                    playbackDiagnostics = "The stream failed before playback."
-                    playbackError = playbackFailureMessage(for: observedItem,
-                        fallback: "This stream could not be played. It may require headers, authentication, or a different player.")
-                case .unknown:
-                    isPreparingPlayback = true
-                @unknown default:
-                    isPreparingPlayback = false
-                    playbackError = "The stream returned an unknown playback state."
-                }
-            }
-        }
-        presentationSizeObservation = item.observe(\.presentationSize, options: [.initial, .new]) { observedItem, _ in
-            DispatchQueue.main.async {
-                guard player.currentItem === observedItem else { return }
-                let size = observedItem.presentationSize
-                if size.width > 0 && size.height > 0 {
-                    playbackDiagnostics = "Video track detected: \(Int(size.width)) × \(Int(size.height))"
-                } else if player.timeControlStatus == .playing {
-                    playbackDiagnostics = "Playback started, but iOS has not reported a video track. This source may use an unsupported format."
-                }
-            }
-        }
-        timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { observedPlayer, _ in
-            DispatchQueue.main.async {
-                guard observedPlayer.currentItem === item else { return }
-                switch observedPlayer.timeControlStatus {
-                case .playing:
-                    if observedPlayer.currentItem?.presentationSize == .zero {
-                        playbackDiagnostics = "Playing without a detected picture. Try another source or an external player."
-                    }
-                case .waitingToPlayAtSpecifiedRate:
-                    playbackDiagnostics = "Waiting for stream data…"
-                case .paused:
-                    if !isPreparingPlayback && playbackError == nil {
-                        playbackDiagnostics = "Playback paused before video appeared."
-                    }
-                @unknown default:
-                    break
-                }
-            }
-        }
-        player.replaceCurrentItem(with: item)
-        // Bound both startup and first-frame waits. Previously this timeout skipped
-        // items that stayed in .unknown, leaving the loading overlay up indefinitely.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 18) {
-            guard player.currentItem === item, playbackError == nil,
-                  item.presentationSize == .zero else { return }
-
-            player.pause()
-            isPreparingPlayback = false
-            if item.status == .unknown {
-                playbackDiagnostics = "Stream startup timed out"
-                playbackError = "The source did not become ready in time. It may be offline, slow, or require request headers that iOS playback cannot send reliably. Try again or choose another source."
-            } else {
-                playbackDiagnostics = "No video frames received"
-                playbackError = "The stream did not produce a picture. It may require additional request headers or a codec that iOS doesn't support. Try again or choose another source."
-            }
-        }
     }
 
     private func openExternalPlayer() {
