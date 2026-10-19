@@ -147,6 +147,21 @@ final class MPVMetalView: UIView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = false
         metalLayer.contentsScale = UIScreen.main.scale
+        metalLayer.wantsExtendedDynamicRangeContent = true
+        metalLayer.drawableSize = CGSize(width: bounds.width * UIScreen.main.scale, height: bounds.height * UIScreen.main.scale)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let scale = window?.screen.nativeScale ?? UIScreen.main.nativeScale
+        metalLayer.contentsScale = scale
+        let size = CGSize(
+            width: (bounds.width * scale).rounded(.toNearestOrAwayFromZero),
+            height: (bounds.height * scale).rounded(.toNearestOrAwayFromZero)
+        )
+        if size.width > 1, size.height > 1, metalLayer.drawableSize != size {
+            metalLayer.drawableSize = size
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -155,5 +170,6 @@ final class MPVMetalView: UIView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = false
         metalLayer.contentsScale = UIScreen.main.scale
+        metalLayer.wantsExtendedDynamicRangeContent = true
     }
 }
