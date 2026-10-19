@@ -12,6 +12,7 @@ struct PlayerView: View {
     @State private var playbackError: String?
     @State private var isPreparingPlayback = false
     @State private var playbackDiagnostics = "Waiting for stream"
+    @State private var externalFallbackMessage: String?
     @State private var itemStatusObservation: NSKeyValueObservation?
     @State private var presentationSizeObservation: NSKeyValueObservation?
     @State private var timeControlObservation: NSKeyValueObservation?
@@ -39,6 +40,14 @@ struct PlayerView: View {
                                     Text(playbackError).font(.footnote).multilineTextAlignment(.center).foregroundStyle(.white.opacity(0.8))
                                     Button { startInternalPlayback() } label: { Label("Try again", systemImage: "arrow.clockwise") }
                                         .buttonStyle(.borderedProminent)
+                                    Button { openInVLC() } label: { Label("Try in VLC", systemImage: "arrow.up.forward.app") }
+                                        .buttonStyle(.bordered)
+                                    if let externalFallbackMessage {
+                                        Text(externalFallbackMessage)
+                                            .font(.caption2)
+                                            .multilineTextAlignment(.center)
+                                            .foregroundStyle(.white.opacity(0.75))
+                                    }
                                 }
                                 .foregroundStyle(.white).padding(18).frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .background(.black.opacity(0.88))
@@ -170,6 +179,12 @@ struct PlayerView: View {
         var details: [String] = []
         if let error = item.error as NSError? {
             details.append("\(error.localizedDescription) (\(error.domain) \(error.code))")
+            if let reason = error.userInfo[NSLocalizedFailureReasonErrorKey] as? String, !reason.isEmpty {
+                details.append(reason)
+            }
+            if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+                details.append("Underlying: \(underlying.domain) \(underlying.code) — \(underlying.localizedDescription)")
+            }
         }
 
         var httpStatus: Int?
@@ -205,6 +220,26 @@ struct PlayerView: View {
 
         let uniqueDetails = Array(NSOrderedSet(array: details)) as? [String] ?? details
         return uniqueDetails.isEmpty ? fallback : uniqueDetails.joined(separator: "\n")
+    }
+
+
+    private func openInVLC() {
+        var components = URLComponents()
+        components.scheme = "vlc-x-callback"
+        components.host = "x-callback-url"
+        components.path = "/stream"
+        components.queryItems = [URLQueryItem(name: "url", value: url.absoluteString)]
+        guard let target = components.url else {
+            externalFallbackMessage = "Could not prepare the VLC link."
+            return
+        }
+        UIApplication.shared.open(target, options: [:]) { success in
+            DispatchQueue.main.async {
+                externalFallbackMessage = success
+                    ? "VLC was opened. Continue playback there."
+                    : "VLC is not installed or could not open this stream."
+            }
+        }
     }
 
     private var audibleGroup: AVMediaSelectionGroup? {
