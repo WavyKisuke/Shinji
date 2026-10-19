@@ -1,0 +1,30 @@
+name: Shinji
+options:
+  bundleIdPrefix: app.shinji
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  Shinji:
+    type: application
+    platform: iOS
+    sources:
+      - path: Shinji
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.shinji.ios
+        PRODUCT_NAME: Shinji
+        INFOPLIST_KEY_CFBundleDisplayName: Shinji
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: NO
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
