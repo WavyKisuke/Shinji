@@ -1,6 +1,21 @@
 import Foundation
 import Combine
 
+struct AddonCatalogItem: Identifiable, Hashable {
+    let id: String
+    let type: String
+    let name: String
+    let posterURL: URL?
+    let description: String?
+    let addonName: String
+}
+
+private struct StremioCatalogDescriptor {
+    let type: String
+    let id: String
+    let name: String
+}
+
 @MainActor
 final class AddonStore: ObservableObject {
     private let storageKey = "shinji.installedAddons.v1"
@@ -8,7 +23,9 @@ final class AddonStore: ObservableObject {
     @Published private(set) var addons: [AddonManifest] = [] {
         didSet { saveAddons() }
     }
+    @Published private(set) var catalogItems: [AddonCatalogItem] = []
     @Published var statusMessage: String?
+    @Published var catalogStatus: String?
 
     init() {
         guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
@@ -28,34 +45,132 @@ final class AddonStore: ObservableObject {
         }
 
         do {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 15
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw AddonError.invalidManifest("The server response was not HTTP.")
-            }
-            guard (200..<300).contains(http.statusCode) else {
-                throw AddonError.httpStatus(http.statusCode)
-            }
-            guard data.count <= 1_000_000 else {
-                throw AddonError.invalidManifest("Manifest exceeds the 1 MB limit.")
-            }
-
+            let data = try await fetchJSON(from: url)
             let manifest = try AddonManifest.parse(data: data, sourceURL: url)
             try manifest.validate()
             guard !addons.contains(where: { $0.id == manifest.id }) else {
                 throw AddonError.duplicate(manifest.name)
             }
             addons.append(manifest)
-            statusMessage = "Installed \\(manifest.name) (\\(manifest.format) manifest)."
+            statusMessage = "Installed \(manifest.name) (\(manifest.format) manifest)."
+            await refreshCatalogs()
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = safeMessage(error)
+        }
+    }
+
+    func refreshCatalogs() async {
+        guard !addons.isEmpty else {
+            catalogItems = []
+            catalogStatus = nil
+            return
+        }
+
+        var loaded: [AddonCatalogItem] = []
+        var compatibleCatalogCount = 0
+        for addon in addons {
+            guard addon.format == "Stremio", let manifestURL = addon.manifestURL else { continue }
+            do {
+                let manifestData = try await fetchJSON(from: manifestURL)
+                let descriptors = parseCatalogs(from: manifestData)
+                compatibleCatalogCount += descriptors.count
+                for descriptor in descriptors.prefix(30) {
+                    guard let url = catalogURL(base: manifestURL, descriptor: descriptor) else { continue }
+                    do {
+                        let data = try await fetchJSON(from: url)
+                        loaded.append(contentsOf: parseMetas(from: data, type: descriptor.type, addonName: addon.name))
+                    } catch {
+                        // One unavailable catalog should not block the other catalogs.
+                    }
+                }
+            } catch {
+                // Keep other installed add-ons usable if one source is offline.
+            }
+        }
+
+        var seen = Set<String>()
+        catalogItems = loaded.filter { seen.insert("\($0.type)|\($0.id)").inserted }
+        if !catalogItems.isEmpty {
+            catalogStatus = "Loaded \(catalogItems.count) titles from installed Stremio add-ons."
+        } else if compatibleCatalogCount == 0 {
+            catalogStatus = "Installed add-ons have no readable Stremio catalogs. This source may use a different manifest format."
+        } else {
+            catalogStatus = "Catalogs were found, but no titles could be loaded. The source may require authentication or use an unsupported response."
         }
     }
 
     func remove(_ addon: AddonManifest) {
         addons.removeAll { $0.id == addon.id }
+        catalogItems.removeAll { $0.addonName == addon.name }
+    }
+
+    private func fetchJSON(from url: URL) async throws -> Data {
+        guard url.scheme?.lowercased() == "https", url.host != nil else {
+            throw AddonError.invalidManifest("Add-on endpoints must use HTTPS.")
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw AddonError.invalidManifest("The server response was not HTTP.")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw AddonError.httpStatus(http.statusCode)
+        }
+        guard data.count <= 2_000_000 else {
+            throw AddonError.invalidManifest("The response exceeds the 2 MB limit.")
+        }
+        return data
+    }
+
+    private func parseCatalogs(from data: Data) -> [StremioCatalogDescriptor] {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let catalogs = json["catalogs"] as? [[String: Any]] else { return [] }
+        return catalogs.compactMap { catalog in
+            guard let type = catalog["type"] as? String,
+                  let id = catalog["id"] as? String, !id.isEmpty else { return nil }
+            let name = catalog["name"] as? String ?? id
+            return StremioCatalogDescriptor(type: type, id: id, name: name)
+        }
+    }
+
+    private func catalogURL(base: URL, descriptor: StremioCatalogDescriptor) -> URL? {
+        guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        let safeType = descriptor.type.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? descriptor.type
+        let safeID = descriptor.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? descriptor.id
+        components.path = "/catalog/\(safeType)/\(safeID).json"
+        return components.url
+    }
+
+    private func parseMetas(from data: Data, type: String, addonName: String) -> [AddonCatalogItem] {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let metas = json["metas"] as? [[String: Any]] else { return [] }
+        return metas.compactMap { meta in
+            guard let id = meta["id"] as? String,
+                  let name = meta["name"] as? String else { return nil }
+            let itemType = (meta["type"] as? String) ?? type
+            let poster = (meta["poster"] as? String).flatMap(URL.init(string:))
+            return AddonCatalogItem(
+                id: id,
+                type: itemType,
+                name: name,
+                posterURL: poster,
+                description: meta["description"] as? String,
+                addonName: addonName
+            )
+        }
+    }
+
+    private func safeMessage(_ error: Error) -> String {
+        // Avoid echoing full URLs, which may contain private source tokens.
+        if let addonError = error as? AddonError {
+            switch addonError {
+            case .httpStatus(let code): return "The source returned HTTP \(code). Check that the manifest URL is valid and accessible."
+            default: return addonError.localizedDescription
+            }
+        }
+        return "Could not load the add-on. Check the URL and connection; private URL details are hidden."
     }
 
     private func saveAddons() {
