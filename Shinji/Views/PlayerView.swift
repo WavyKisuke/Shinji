@@ -4,6 +4,7 @@ import AVKit
 struct PlayerView: View {
     let url: URL
     let title: String
+    var headers: [String: String] = [:]
     @State private var player = AVPlayer()
     @State private var isMuted = false
     @State private var externalLaunchFailed = false
@@ -98,7 +99,8 @@ struct PlayerView: View {
         isPreparingPlayback = true
         PlaybackAudio.configureToMixWithOtherAudio()
 
-        let item = AVPlayerItem(url: url)
+        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+        let item = AVPlayerItem(asset: asset)
         itemStatusObservation = item.observe(\.status, options: [.initial, .new]) { observedItem, _ in
             DispatchQueue.main.async {
                 switch observedItem.status {
