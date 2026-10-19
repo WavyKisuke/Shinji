@@ -8,9 +8,16 @@ settings:
     SWIFT_VERSION: 5.0
     IPHONEOS_DEPLOYMENT_TARGET: 16.0
     TARGETED_DEVICE_FAMILY: "1"
+packages:
+  MPVKit:
+    url: https://github.com/NuvioMedia/MPVKit.git
+    branch: Nuvio
 targets:
   Shinji:
     type: application
+    dependencies:
+      - package: MPVKit
+        product: MPVKit
     platform: iOS
     sources:
       - path: Shinji
