@@ -57,6 +57,11 @@ struct SettingsView: View {
                         settingsRow(icon: "person.crop.circle", title: "Account", subtitle: "Profiles and parental controls", value: "Local")
                     }
                     NavigationLink {
+                        MediaServerSettingsView()
+                    } label: {
+                        settingsRow(icon: "server.rack", title: "Media Servers", subtitle: "Connect Jellyfin or Emby", value: nil)
+                    }
+                    NavigationLink {
                         privacySettings
                     } label: {
                         settingsRow(icon: "hand.raised.fill", title: "Privacy", subtitle: "Permissions, Data", value: nil)
