@@ -506,8 +506,8 @@ struct LibraryView: View {
     private var catalogShelves: some View {
         VStack(alignment: .leading, spacing: 26) {
             if kind == .movies {
-                shelfSection("Trending Movies", items: addonStore.catalogItems.filter { $0.type == "movie" }.reversed())
-                shelfSection("Trending Shows", items: addonStore.catalogItems.filter { $0.type == "series" }.reversed())
+                shelfSection("Trending Movies", items: Array(addonStore.catalogItems.filter { $0.type == "movie" }.reversed()))
+                shelfSection("Trending Shows", items: Array(addonStore.catalogItems.filter { $0.type == "series" }.reversed()))
                 shelfSection("Popular Movies", items: Array(addonStore.catalogItems.filter { $0.type == "movie" }.prefix(12)))
             } else if kind == .shows {
                 shelfSection("Trending Shows", items: addonStore.catalogItems.filter { $0.type == "series" }.reversed())
