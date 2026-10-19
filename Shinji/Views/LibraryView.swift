@@ -51,6 +51,7 @@ struct LibraryView: View {
     let kind: LibraryKind
     @EnvironmentObject private var addonStore: AddonStore
     @State private var searchText = ""
+    @State private var isSearchPresented = false
     @State private var streamURL = ""
     @State private var showPlayer = false
     @State private var showAddStream = false
@@ -112,6 +113,32 @@ struct LibraryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 26) {
                     header
+                    if isSearchPresented {
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(Color(hex: accentHex))
+                            TextField("Search movies, shows, or channels", text: $searchText)
+                                .font(.system(size: 15))
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .submitLabel(.search)
+                            if !searchText.isEmpty {
+                                Button {
+                                    searchText = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.white.opacity(0.55))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 13)
+                        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(hex: accentHex).opacity(0.45), lineWidth: 1))
+                        .padding(.horizontal, 18)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                     filterBar
                     contentSection
                     catalogShelves
@@ -260,6 +287,21 @@ struct LibraryView: View {
                     .foregroundStyle(.white.opacity(0.55))
             }
             Spacer()
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isSearchPresented.toggle()
+                    if !isSearchPresented { searchText = "" }
+                }
+            } label: {
+                Image(systemName: isSearchPresented ? "xmark" : "magnifyingglass")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.white.opacity(0.08), in: Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isSearchPresented ? "Close search" : "Search titles")
             Button {
                 showAddStream = true
             } label: {
