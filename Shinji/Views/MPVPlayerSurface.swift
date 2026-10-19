@@ -132,11 +132,6 @@ struct MPVPlayerSurface: UIViewRepresentable {
         func shutdown() {
             guard let handle = mpv else { return }
             mpv = nil
-            var stopCommand: [UnsafePointer<CChar>?] = ["stop".withCString { strdup($0).map(UnsafePointer.init) }, nil]
-            _ = stopCommand.withUnsafeMutableBufferPointer { buffer in
-                mpv_command(handle, buffer.baseAddress)
-            }
-            if let pointer = stopCommand[0] { free(UnsafeMutablePointer(mutating: pointer)) }
             mpv_terminate_destroy(handle)
         }
     }
