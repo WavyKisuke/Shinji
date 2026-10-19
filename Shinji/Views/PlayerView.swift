@@ -13,6 +13,8 @@ struct PlayerView: View {
     @State private var isPreparingPlayback = false
     @State private var playbackDiagnostics = "Waiting for stream"
     @State private var itemStatusObservation: NSKeyValueObservation?
+    @State private var presentationSizeObservation: NSKeyValueObservation?
+    @State private var timeControlObservation: NSKeyValueObservation?
     @AppStorage("shinjiPreferredPlayer") private var preferredPlayer = "Shinji"
 
     var body: some View {
@@ -142,6 +144,10 @@ struct PlayerView: View {
         .onDisappear {
             itemStatusObservation?.invalidate()
             itemStatusObservation = nil
+            presentationSizeObservation?.invalidate()
+            presentationSizeObservation = nil
+            timeControlObservation?.invalidate()
+            timeControlObservation = nil
             player.pause()
             player.replaceCurrentItem(with: nil)
         }
@@ -170,7 +176,10 @@ struct PlayerView: View {
 
     private func startInternalPlayback() {
         itemStatusObservation?.invalidate()
+        presentationSizeObservation?.invalidate()
+        timeControlObservation?.invalidate()
         playbackError = nil
+        playbackDiagnostics = "Preparing stream…"
         isPreparingPlayback = true
         PlaybackAudio.configureToMixWithOtherAudio()
 
@@ -198,8 +207,43 @@ struct PlayerView: View {
                 }
             }
         }
+        presentationSizeObservation = item.observe(\.presentationSize, options: [.initial, .new]) { observedItem, _ in
+            DispatchQueue.main.async {
+                guard player.currentItem === observedItem else { return }
+                let size = observedItem.presentationSize
+                if size.width > 0 && size.height > 0 {
+                    playbackDiagnostics = "Video track detected: \(Int(size.width)) × \(Int(size.height))"
+                } else if player.timeControlStatus == .playing {
+                    playbackDiagnostics = "Playback started, but iOS has not reported a video track. This source may use an unsupported format."
+                }
+            }
+        }
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { observedPlayer, _ in
+            DispatchQueue.main.async {
+                guard observedPlayer.currentItem === item else { return }
+                switch observedPlayer.timeControlStatus {
+                case .playing:
+                    if observedPlayer.currentItem?.presentationSize == .zero {
+                        playbackDiagnostics = "Playing without a detected picture. Try another source or an external player."
+                    }
+                case .waitingToPlayAtSpecifiedRate:
+                    playbackDiagnostics = "Waiting for stream data…"
+                case .paused:
+                    if !isPreparingPlayback && playbackError == nil {
+                        playbackDiagnostics = "Playback paused before video appeared."
+                    }
+                @unknown default:
+                    break
+                }
+            }
+        }
         player.replaceCurrentItem(with: item)
-        // The status observer starts playback once AVFoundation confirms readiness.
+        // A ready item may still fail to produce video frames; report that separately.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            guard player.currentItem === item, !isPreparingPlayback, playbackError == nil,
+                  item.presentationSize == .zero else { return }
+            playbackDiagnostics = "Still no video picture after 15 seconds. The stream may need different headers or a player that supports its codec."
+        }
     }
 
     private func openExternalPlayer() {
