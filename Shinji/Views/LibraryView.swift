@@ -111,7 +111,6 @@ struct LibraryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 26) {
                     header
-                    featuredBanner
                     filterBar
                     contentSection
                     streamURLSection
