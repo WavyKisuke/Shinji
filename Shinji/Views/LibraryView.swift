@@ -44,10 +44,12 @@ private struct ShowcaseItem: Identifiable {
     let subtitle: String
     let symbol: String
     let colors: [Color]
+    var posterURL: URL? = nil
 }
 
 struct LibraryView: View {
     let kind: LibraryKind
+    @EnvironmentObject private var addonStore: AddonStore
     @State private var searchText = ""
     @State private var streamURL = ""
     @State private var showPlayer = false
@@ -58,6 +60,23 @@ struct LibraryView: View {
     private let filters = ["For You", "Popular", "Recently Added", "Action", "Drama"]
 
     private var items: [ShowcaseItem] {
+        let realItems = addonStore.catalogItems.filter { item in
+            switch kind {
+            case .movies: return item.type == "movie"
+            case .shows: return item.type == "series"
+            case .live: return ["channel", "tv", "live"].contains(item.type.lowercased())
+            }
+        }.map { item in
+            ShowcaseItem(
+                id: item.id + "|" + item.addonName,
+                title: item.name,
+                subtitle: item.addonName,
+                symbol: kind.symbol,
+                colors: [Color(hex: glowHex), Color(hex: accentHex).opacity(0.55)],
+                posterURL: item.posterURL
+            )
+        }
+        if !realItems.isEmpty { return realItems }
         switch kind {
         case .movies:
             return [
@@ -123,6 +142,7 @@ struct LibraryView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task { await addonStore.refreshCatalogs() }
     }
 
     private var header: some View {
@@ -251,7 +271,7 @@ struct LibraryView: View {
                     Text(searchText.isEmpty ? sectionTitle : "Search results")
                         .font(.system(size: 21, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text(searchText.isEmpty ? "Hand-picked for your midnight mood" : "Matching titles in this preview")
+                    Text(searchText.isEmpty ? (addonStore.catalogItems.isEmpty ? "Hand-picked for your midnight mood" : "From your installed add-ons") : "Matching titles")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.48))
                 }
@@ -275,15 +295,26 @@ struct LibraryView: View {
                                 ZStack(alignment: .bottomLeading) {
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                                         .fill(LinearGradient(colors: item.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    Circle()
-                                        .fill(Color.white.opacity(0.12))
-                                        .frame(width: 95, height: 95)
-                                        .blur(radius: 15)
-                                        .offset(x: 45, y: -35)
-                                    Image(systemName: item.symbol)
-                                        .font(.system(size: 38, weight: .light))
-                                        .foregroundStyle(.white.opacity(0.88))
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    if let posterURL = item.posterURL {
+                                        AsyncImage(url: posterURL) { image in
+                                            image.resizable().scaledToFill()
+                                        } placeholder: {
+                                            LinearGradient(colors: item.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                                                .overlay(Image(systemName: item.symbol).font(.system(size: 38, weight: .light)).foregroundStyle(.white.opacity(0.7)))
+                                        }
+                                        .frame(width: 145, height: 190)
+                                        .clipped()
+                                    } else {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.12))
+                                            .frame(width: 95, height: 95)
+                                            .blur(radius: 15)
+                                            .offset(x: 45, y: -35)
+                                        Image(systemName: item.symbol)
+                                            .font(.system(size: 38, weight: .light))
+                                            .foregroundStyle(.white.opacity(0.88))
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    }
                                     LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
                                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                                     Text("SHINJI SELECT")
@@ -351,9 +382,17 @@ struct LibraryView: View {
     }
 
     private var footerNote: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "info.circle")
-            Text("Preview artwork is illustrative. Connect a compatible add-on to populate real titles and streams.")
+        VStack(alignment: .leading, spacing: 6) {
+            if let status = addonStore.catalogStatus {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "info.circle")
+                    Text(status)
+                }
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle")
+                Text("Preview artwork is illustrative when no compatible catalog titles are available.")
+            }
         }
         .font(.caption2)
         .foregroundStyle(.white.opacity(0.38))
