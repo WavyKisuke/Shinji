@@ -77,8 +77,14 @@ struct MPVPlayerSurface: UIViewRepresentable {
                 return
             }
             setMuted(muted)
-            DispatchQueue.main.async { self.onStatus?("MPV player initialized; opening stream…") }
-            issue(["loadfile", url.absoluteString, "replace"])
+            DispatchQueue.main.async { self.onStatus?("MPV initialized; waiting for video surface…") }
+            view.onReadyForPlayback = { [weak self] in
+                guard let self, self.mpv != nil else { return }
+                self.issue(["loadfile", url.absoluteString, "replace"])
+                DispatchQueue.main.async { self.onStatus?("MPV opening stream…") }
+            }
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in self?.readEvents(handle: handle) }
         }
 
@@ -132,6 +138,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
         func shutdown() {
             guard let handle = mpv else { return }
             mpv = nil
+            surface?.onReadyForPlayback = nil
             mpv_terminate_destroy(handle)
         }
     }
@@ -140,16 +147,8 @@ struct MPVPlayerSurface: UIViewRepresentable {
 final class MPVMetalView: UIView {
     override class var layerClass: AnyClass { CAMetalLayer.self }
     var metalLayer: CAMetalLayer { layer as! CAMetalLayer }
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        backgroundColor = .black
-        metalLayer.pixelFormat = .bgra8Unorm
-        metalLayer.framebufferOnly = false
-        metalLayer.contentsScale = UIScreen.main.scale
-        metalLayer.wantsExtendedDynamicRangeContent = true
-        metalLayer.drawableSize = CGSize(width: bounds.width * UIScreen.main.scale, height: bounds.height * UIScreen.main.scale)
-    }
+    var onReadyForPlayback: (() -> Void)?
+    private var didSignalReadyForPlayback = false
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -162,6 +161,19 @@ final class MPVMetalView: UIView {
         if size.width > 1, size.height > 1, metalLayer.drawableSize != size {
             metalLayer.drawableSize = size
         }
+        if !didSignalReadyForPlayback, window != nil, bounds.width > 1, bounds.height > 1 {
+            didSignalReadyForPlayback = true
+            onReadyForPlayback?()
+        }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .black
+        metalLayer.pixelFormat = .bgra8Unorm
+        metalLayer.framebufferOnly = false
+        metalLayer.contentsScale = UIScreen.main.scale
+        metalLayer.wantsExtendedDynamicRangeContent = true
     }
 
     required init?(coder: NSCoder) {
