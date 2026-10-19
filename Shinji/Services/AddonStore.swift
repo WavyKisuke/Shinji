@@ -32,6 +32,7 @@ final class AddonStore: ObservableObject {
     @Published private(set) var catalogItems: [AddonCatalogItem] = []
     @Published private(set) var streamOptions: [AddonStreamOption] = []
     @Published var streamStatus: String?
+    @Published private(set) var isLoadingStreams = false
     @Published var statusMessage: String?
     @Published var catalogStatus: String?
 
@@ -109,7 +110,9 @@ final class AddonStore: ObservableObject {
 
     func loadStreams(for item: AddonCatalogItem) async {
         streamOptions = []
+        isLoadingStreams = true
         streamStatus = "Looking for available streams…"
+        defer { isLoadingStreams = false }
         guard let addon = addons.first(where: { $0.name == item.addonName }),
               let manifestURL = addon.manifestURL,
               addon.format == "Stremio",
@@ -141,7 +144,8 @@ final class AddonStore: ObservableObject {
         guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
         let type = item.type.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.type
         let id = item.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.id
-        components.path = "/stream/\(type)/\(id).json"
+        let prefix = addonPathPrefix(components.path)
+        components.path = prefix + "stream/\(type)/\(id).json"
         return components.url
     }
 
@@ -185,8 +189,16 @@ final class AddonStore: ObservableObject {
         guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
         let safeType = descriptor.type.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? descriptor.type
         let safeID = descriptor.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? descriptor.id
-        components.path = "/catalog/\(safeType)/\(safeID).json"
+        let prefix = addonPathPrefix(components.path)
+        components.path = prefix + "catalog/\(safeType)/\(safeID).json"
         return components.url
+    }
+
+    private func addonPathPrefix(_ path: String) -> String {
+        if let range = path.range(of: "/manifest.json", options: .caseInsensitive), range.upperBound == path.endIndex {
+            return String(path[..<range.lowerBound]) + "/"
+        }
+        return "/"
     }
 
     private func parseMetas(from data: Data, type: String, addonName: String) -> [AddonCatalogItem] {
