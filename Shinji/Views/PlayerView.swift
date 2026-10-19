@@ -293,16 +293,21 @@ struct PlayerView: View {
             }
         }
         player.replaceCurrentItem(with: item)
-        // A ready item may still fail to produce video frames; report that separately.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
-            guard player.currentItem === item, !isPreparingPlayback, playbackError == nil,
+        // Bound both startup and first-frame waits. Previously this timeout skipped
+        // items that stayed in .unknown, leaving the loading overlay up indefinitely.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 18) {
+            guard player.currentItem === item, playbackError == nil,
                   item.presentationSize == .zero else { return }
-            // AVPlayer can report ready/playing for audio-only or unsupported-video
-            // streams without ever producing a picture. Turn that silent black screen
-            // into a useful, retryable error instead of leaving the spinner/status forever.
-            playbackDiagnostics = "No video frames received"
-            playbackError = "The stream started but no picture arrived. It may require additional request headers or a codec that iOS doesn't support. Try again or choose another source."
+
             player.pause()
+            isPreparingPlayback = false
+            if item.status == .unknown {
+                playbackDiagnostics = "Stream startup timed out"
+                playbackError = "The source did not become ready in time. It may be offline, slow, or require request headers that iOS playback cannot send reliably. Try again or choose another source."
+            } else {
+                playbackDiagnostics = "No video frames received"
+                playbackError = "The stream did not produce a picture. It may require additional request headers or a codec that iOS doesn't support. Try again or choose another source."
+            }
         }
     }
 
