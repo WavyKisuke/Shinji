@@ -23,7 +23,14 @@ struct PlayerView: View {
         VStack(spacing: 14) {
             if preferredPlayer == "Shinji" || externalLaunchFailed {
                 VStack(spacing: 10) {
-                    VideoPlayer(player: player)
+                    MPVPlayerSurface(url: url, headers: headers, muted: isMuted, onStatus: { status in
+                        playbackDiagnostics = status
+                        isPreparingPlayback = false
+                    }, onError: { error in
+                        playbackError = error
+                        isPreparingPlayback = false
+                    })
+                        .id(mpvReloadID)
                         .frame(maxWidth: .infinity)
                         .aspectRatio(16.0 / 9.0, contentMode: .fit)
                         .background(.black)
