@@ -53,6 +53,8 @@ struct LibraryView: View {
     @State private var searchText = ""
     @State private var streamURL = ""
     @State private var showPlayer = false
+    @State private var selectedItem: AddonCatalogItem?
+    @State private var selectedStreamURL: URL?
     @State private var selectedFilter = "For You"
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
     @AppStorage("shinjiGlowHex") private var glowHex = "4936FF"
@@ -120,11 +122,53 @@ struct LibraryView: View {
             }
             .background(Color.black.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(item: $selectedItem) { item in
+                NavigationStack {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(item.name).font(.title2.bold())
+                        if let description = item.description, !description.isEmpty {
+                            Text(description).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        if let status = addonStore.streamStatus {
+                            Text(status).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        if addonStore.streamOptions.isEmpty {
+                            ProgressView("Checking source…")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            ForEach(addonStore.streamOptions) { option in
+                                Button {
+                                    selectedStreamURL = option.url
+                                    selectedItem = nil
+                                    showPlayer = true
+                                } label: {
+                                    Label(option.title, systemImage: "play.circle.fill")
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(12)
+                                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding()
+                    .navigationTitle("Available streams")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { selectedItem = nil }
+                        }
+                    }
+                    .task { await addonStore.loadStreams(for: item) }
+                }
+                .preferredColorScheme(.dark)
+            }
             .navigationDestination(isPresented: $showPlayer) {
-                if let url = URL(string: streamURL),
+                if let url = selectedStreamURL ?? URL(string: streamURL),
                    ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
                    url.host != nil {
-                    PlayerView(url: url, title: "Stream")
+                    PlayerView(url: url, title: selectedStreamURL == nil ? "Stream" : "Selected title")
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle")
@@ -335,6 +379,13 @@ struct LibraryView: View {
                                     .lineLimit(1)
                             }
                             .frame(width: 145, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                guard let catalogItem = addonStore.catalogItems.first(where: { $0.id == item.id && $0.addonName == item.subtitle }) else { return }
+                                addonStore.streamStatus = nil
+                                addonStore.streamOptions = []
+                                selectedItem = catalogItem
+                            }
                         }
                     }
                     .padding(.horizontal, 18)
