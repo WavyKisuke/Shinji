@@ -194,54 +194,92 @@ struct LibraryView: View {
             }
             .sheet(item: $selectedItem) { item in
                 NavigationStack {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(item.name).font(.title2.bold())
-                        if let description = item.description, !description.isEmpty {
-                            Text(description).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        if addonStore.isLoadingStreams {
-                            ProgressView("Checking source…")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else if addonStore.streamOptions.isEmpty {
-                            if let status = addonStore.streamStatus {
-                                Text(status)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button {
-                                Task { await addonStore.loadStreams(for: item) }
-                            } label: {
-                                Label("Retry", systemImage: "arrow.clockwise")
-                            }
-                            .buttonStyle(.bordered)
-                        } else {
-                            ForEach(addonStore.streamOptions) { option in
-                                Button {
-                                    selectedStreamURL = option.url
-                                    selectedItem = nil
-                                    showPlayer = true
-                                } label: {
-                                    Label(option.title, systemImage: "play.circle.fill")
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(12)
-                                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 18) {
+                            VStack(alignment: .leading, spacing: 7) {
+                                Text(item.name)
+                                    .font(.system(size: 25, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.white)
+                                if let description = item.description, !description.isEmpty {
+                                    Text(description)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white.opacity(0.62))
+                                        .lineLimit(3)
                                 }
-                                .buttonStyle(.plain)
+                                HStack(spacing: 7) {
+                                    Image(systemName: "dot.radiowaves.left.and.right")
+                                    Text(addonStore.isLoadingStreams ? "SEARCHING SOURCES" : "\(addonStore.streamOptions.count) AVAILABLE SOURCES")
+                                }
+                                .font(.system(size: 10, weight: .bold))
+                                .tracking(1.1)
+                                .foregroundStyle(Color(hex: accentHex))
+                                .padding(.top, 3)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            if addonStore.isLoadingStreams {
+                                HStack(spacing: 12) {
+                                    ProgressView()
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Finding playable sources")
+                                            .font(.headline)
+                                        Text("Checking your installed add-ons")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(16)
+                                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+                            } else if addonStore.streamOptions.isEmpty {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Label("No playable sources found", systemImage: "exclamationmark.triangle")
+                                        .font(.headline)
+                                    Text(addonStore.streamStatus ?? "Try again or install another stream add-on.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Button {
+                                        Task { await addonStore.loadStreams(for: item) }
+                                    } label: {
+                                        Label("Search again", systemImage: "arrow.clockwise")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(Color(hex: accentHex))
+                                }
+                                .padding(16)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+                            } else {
+                                LazyVStack(spacing: 12) {
+                                    ForEach(Array(addonStore.streamOptions.enumerated()), id: \.element.id) { index, option in
+                                        streamResultCard(option, index: index)
+                                    }
+                                }
+                            }
+
+                            if !addonStore.isLoadingStreams, let status = addonStore.streamStatus, !addonStore.streamOptions.isEmpty {
+                                Text(status)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.4))
                             }
                         }
-                        Spacer()
+                        .padding(18)
+                        .padding(.bottom, 24)
                     }
-                    .padding()
+                    .background(Color(red: 0.055, green: 0.055, blue: 0.07).ignoresSafeArea())
                     .navigationTitle("Available streams")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Done") { selectedItem = nil }
+                                .tint(Color(hex: accentHex))
                         }
                     }
                     .task { await addonStore.loadStreams(for: item) }
                 }
                 .preferredColorScheme(.dark)
+                .presentationDragIndicator(.visible)
             }
             .navigationDestination(isPresented: $showPlayer) {
                 if let url = selectedStreamURL ?? URL(string: streamURL),
@@ -266,6 +304,73 @@ struct LibraryView: View {
         }
         .preferredColorScheme(.dark)
         .task { await addonStore.refreshCatalogs() }
+    }
+
+    private func streamResultCard(_ option: AddonStreamOption, index: Int) -> some View {
+        let parts = option.title.components(separatedBy: " · ")
+        let streamName = parts.first ?? option.title
+        let addonName = parts.count > 1 ? parts.last! : "Stream add-on"
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 7) {
+                    Text(addonName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(String(format: "%02d", index + 1))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                Text(streamName)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 6) {
+                    Image(systemName: "server.rack")
+                    Text("Source: \(addonName)")
+                        .lineLimit(1)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.52))
+                HStack(spacing: 6) {
+                    Image(systemName: "link")
+                    Text(option.url.host ?? "Direct stream")
+                        .lineLimit(1)
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.38))
+            }
+            Spacer(minLength: 0)
+            Button {
+                selectedStreamURL = option.url
+                selectedItem = nil
+                showPlayer = true
+            } label: {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .background(Color.green.opacity(0.85), in: Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play \(streamName)")
+        }
+        .padding(14)
+        .background(
+            LinearGradient(
+                colors: [Color.white.opacity(0.075), Color.white.opacity(0.035)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.075), lineWidth: 1)
+        )
     }
 
     private var header: some View {
