@@ -142,7 +142,6 @@ struct LibraryView: View {
                     filterBar
                     contentSection
                     catalogShelves
-                    streamURLSection
                     footerNote
                 }
                 .padding(.top, 8)
