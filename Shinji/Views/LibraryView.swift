@@ -53,6 +53,7 @@ struct LibraryView: View {
     @State private var searchText = ""
     @State private var streamURL = ""
     @State private var showPlayer = false
+    @State private var showAddStream = false
     @State private var selectedItem: AddonCatalogItem?
     @State private var selectedStreamURL: URL?
     @State private var selectedFilter = "For You"
@@ -121,6 +122,48 @@ struct LibraryView: View {
             }
             .background(Color.black.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showAddStream) {
+                NavigationStack {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Label("Add stream URL", systemImage: "play.rectangle.on.rectangle")
+                            .font(.title2.bold())
+                        Text("Paste a direct video stream URL from a source you’re authorized to access.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        TextField("https://example.org/video.m3u8", text: $streamURL)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(14)
+                            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                        Button {
+                            showAddStream = false
+                            selectedStreamURL = nil
+                            showPlayer = true
+                        } label: {
+                            Label("Open Player", systemImage: "play.fill")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color(hex: accentHex), in: RoundedRectangle(cornerRadius: 14))
+                                .foregroundStyle(.white)
+                        }
+                        .disabled(!isValidStreamURL)
+                        .opacity(isValidStreamURL ? 1 : 0.5)
+                        Spacer()
+                    }
+                    .padding(20)
+                    .navigationTitle("Add stream")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Cancel") { showAddStream = false }
+                        }
+                    }
+                }
+                .preferredColorScheme(.dark)
+                .presentationDetents([.medium, .large])
+            }
             .sheet(item: $selectedItem) { item in
                 NavigationStack {
                     VStack(alignment: .leading, spacing: 16) {
@@ -219,12 +262,18 @@ struct LibraryView: View {
                     .foregroundStyle(.white.opacity(0.55))
             }
             Spacer()
-            Image(systemName: kind.symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(Color.white.opacity(0.08), in: Circle())
-                .overlay(Circle().stroke(Color.purple.opacity(0.35), lineWidth: 1))
+            Button {
+                showAddStream = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Color(hex: accentHex).opacity(0.22), in: Circle())
+                    .overlay(Circle().stroke(Color(hex: accentHex).opacity(0.75), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add stream URL")
         }
         .padding(.horizontal, 20)
     }
