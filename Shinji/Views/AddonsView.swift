@@ -32,11 +32,17 @@ struct AddonsView: View {
                 }
                 Section("Installed Add-ons") {
                     if store.addons.isEmpty {
-                        ContentUnavailableView(
-                            "No add-ons installed",
-                            systemImage: "puzzlepiece.extension",
-                            description: Text("Add a compatible HTTPS JSON manifest above.")
-                        )
+                        VStack(spacing: 8) {
+                            Image(systemName: "puzzlepiece.extension")
+                                .font(.title)
+                                .foregroundStyle(.secondary)
+                            Text("No add-ons installed").font(.headline)
+                            Text("Add a compatible HTTPS JSON manifest above.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
                     } else {
                         ForEach(store.addons) { addon in
                             VStack(alignment: .leading, spacing: 5) {
