@@ -11,6 +11,7 @@ struct PlayerView: View {
     @State private var externalLaunchFailed = false
     @State private var playbackError: String?
     @State private var isPreparingPlayback = false
+    @State private var playbackDiagnostics = "Waiting for stream"
     @State private var itemStatusObservation: NSKeyValueObservation?
     @AppStorage("shinjiPreferredPlayer") private var preferredPlayer = "Shinji"
 
@@ -54,6 +55,12 @@ struct PlayerView: View {
                         }
                     if isPreparingPlayback {
                         ProgressView("Loading stream…")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                    } else if playbackError == nil {
+                        Text(playbackDiagnostics)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal)
                     }
@@ -176,12 +183,11 @@ struct PlayerView: View {
                 case .readyToPlay:
                     playbackError = nil
                     isPreparingPlayback = false
+                    playbackDiagnostics = "Stream is ready; waiting for video frames."
                     player.play()
-                    if player.timeControlStatus == .paused {
-                        player.playImmediately(atRate: 1.0)
-                    }
                 case .failed:
                     isPreparingPlayback = false
+                    playbackDiagnostics = "The stream failed before playback."
                     playbackError = observedItem.error?.localizedDescription
                         ?? "This stream could not be played. It may require headers, authentication, or a different player."
                 case .unknown:
