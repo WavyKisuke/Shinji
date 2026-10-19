@@ -3,8 +3,28 @@ import Combine
 
 @MainActor
 final class AddonStore: ObservableObject {
-    @Published private(set) var addons: [AddonManifest] = []
+    private let storageKey = "shinji.installedAddons.v1"
+
+    @Published private(set) var addons: [AddonManifest] = [] {
+        didSet {
+            saveAddons()
+        }
+    }
     @Published var statusMessage: String?
+
+    init() {
+        guard let data = UserDefaults.standard.data(forKey: storageKey) else {
+            return
+        }
+
+        do {
+            let savedAddons = try JSONDecoder().decode([AddonManifest].self, from: data)
+            addons = savedAddons
+        } catch {
+            // Ignore an unreadable saved list instead of preventing the app from opening.
+            UserDefaults.standard.removeObject(forKey: storageKey)
+        }
+    }
 
     func install(from rawURL: String) async {
         guard let url = URL(string: rawURL.trimmingCharacters(in: .whitespacesAndNewlines)),
@@ -42,5 +62,14 @@ final class AddonStore: ObservableObject {
 
     func remove(_ addon: AddonManifest) {
         addons.removeAll { $0.id == addon.id }
+    }
+
+    private func saveAddons() {
+        do {
+            let data = try JSONEncoder().encode(addons)
+            UserDefaults.standard.set(data, forKey: storageKey)
+        } catch {
+            statusMessage = "Could not save the installed add-ons."
+        }
     }
 }
