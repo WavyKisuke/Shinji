@@ -114,6 +114,7 @@ struct LibraryView: View {
                     header
                     filterBar
                     contentSection
+                    catalogShelves
                     streamURLSection
                     footerNote
                 }
@@ -500,6 +501,92 @@ struct LibraryView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var catalogShelves: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            if kind == .movies {
+                shelfSection("Trending Movies", items: addonStore.catalogItems.filter { $0.type == "movie" }.reversed())
+                shelfSection("Trending Shows", items: addonStore.catalogItems.filter { $0.type == "series" }.reversed())
+                shelfSection("Popular Movies", items: Array(addonStore.catalogItems.filter { $0.type == "movie" }.prefix(12)))
+            } else if kind == .shows {
+                shelfSection("Trending Shows", items: addonStore.catalogItems.filter { $0.type == "series" }.reversed())
+                shelfSection("Popular Shows", items: Array(addonStore.catalogItems.filter { $0.type == "series" }.prefix(12)))
+            } else {
+                shelfSection("Live Channels", items: addonStore.catalogItems.filter { ["channel", "tv", "live"].contains($0.type.lowercased()) })
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func shelfSection(_ title: String, items: [AddonCatalogItem]) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(title)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .padding(.horizontal, 20)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 13) {
+                        ForEach(Array(items.prefix(18).enumerated()), id: \\.offset) { _, item in
+                            Button {
+                                selectedItem = item
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Group {
+                                        if let posterURL = item.posterURL {
+                                            AsyncImage(url: posterURL) { image in
+                                                image.resizable().scaledToFill()
+                                            } placeholder: {
+                                                posterPlaceholder(for: item)
+                                            }
+                                        } else {
+                                            posterPlaceholder(for: item)
+                                        }
+                                    }
+                                    .frame(width: 132, height: 190)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+
+                                    Text(item.name)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(1)
+                                    Text(item.addonName)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.white.opacity(0.48))
+                                        .lineLimit(1)
+                                }
+                                .frame(width: 132, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                }
+            }
+        }
+    }
+
+    private func posterPlaceholder(for item: AddonCatalogItem) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: glowHex).opacity(0.8), Color(hex: accentHex).opacity(0.25), Color.black],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Image(systemName: item.type == "series" ? "tv" : (item.type == "movie" ? "film" : "dot.radiowaves.left.and.right"))
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(.white.opacity(0.75))
+        }
     }
 
     private var streamURLSection: some View {
