@@ -14,6 +14,6 @@ struct MainTabView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
-        .tint(.cyan)
+        .tint(Color(hex: UserDefaults.standard.string(forKey: "shinjiAccentHex") ?? "B64DFF"))
     }
 }
