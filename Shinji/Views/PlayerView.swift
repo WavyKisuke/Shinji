@@ -294,10 +294,15 @@ struct PlayerView: View {
         }
         player.replaceCurrentItem(with: item)
         // A ready item may still fail to produce video frames; report that separately.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
             guard player.currentItem === item, !isPreparingPlayback, playbackError == nil,
                   item.presentationSize == .zero else { return }
-            playbackDiagnostics = "Still no video picture after 15 seconds. The stream may need different headers or a player that supports its codec."
+            // AVPlayer can report ready/playing for audio-only or unsupported-video
+            // streams without ever producing a picture. Turn that silent black screen
+            // into a useful, retryable error instead of leaving the spinner/status forever.
+            playbackDiagnostics = "No video frames received"
+            playbackError = "The stream started but no picture arrived. It may require additional request headers or a codec that iOS doesn't support. Try again or choose another source."
+            player.pause()
         }
     }
 
