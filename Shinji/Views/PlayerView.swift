@@ -21,6 +21,25 @@ struct PlayerView: View {
                     VideoPlayer(player: player)
                         .aspectRatio(16.0 / 9.0, contentMode: .fit)
                         .background(.black)
+                        .overlay {
+                            if isPreparingPlayback {
+                                VStack(spacing: 10) {
+                                    ProgressView().tint(.white)
+                                    Text("Loading video…").font(.footnote.weight(.medium)).foregroundStyle(.white)
+                                }
+                                .padding(16).background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
+                            } else if let playbackError {
+                                VStack(spacing: 10) {
+                                    Image(systemName: "exclamationmark.triangle.fill").font(.title2)
+                                    Text("Couldn't play this stream").font(.headline)
+                                    Text(playbackError).font(.footnote).multilineTextAlignment(.center).foregroundStyle(.white.opacity(0.8))
+                                    Button { startInternalPlayback() } label: { Label("Try again", systemImage: "arrow.clockwise") }
+                                        .buttonStyle(.borderedProminent)
+                                }
+                                .foregroundStyle(.white).padding(18).frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(.black.opacity(0.88))
+                            }
+                        }
                         .overlay(alignment: .topTrailing) {
                             Button { isFullscreen = true } label: {
                                 Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -36,19 +55,6 @@ struct PlayerView: View {
                         ProgressView("Loading stream…")
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal)
-                    }
-                    if let playbackError {
-                        Text(playbackError)
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal)
-                        Button {
-                            startInternalPlayback()
-                        } label: {
-                            Label("Retry playback", systemImage: "arrow.clockwise")
-                        }
-                        .buttonStyle(.bordered)
                     }
                 }
             } else {
@@ -136,6 +142,13 @@ struct PlayerView: View {
             playbackError = "Playback stalled. The source may be slow, offline, or require additional access."
             isPreparingPlayback = false
         }
+        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemFailedToPlayToEndTime)) { notification in
+            guard let item = notification.object as? AVPlayerItem, item === player.currentItem else { return }
+            playbackError = (notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
+                ?? item.error?.localizedDescription
+                ?? "The stream stopped unexpectedly or uses a format iOS can't play."
+            isPreparingPlayback = false
+        }
     }
     private var audibleGroup: AVMediaSelectionGroup? {
         player.currentItem?.asset.mediaSelectionGroup(forMediaCharacteristic: .audible)
@@ -175,7 +188,8 @@ struct PlayerView: View {
             }
         }
         player.replaceCurrentItem(with: item)
-        player.play()
+        // Wait for AVFoundation to confirm the item is ready before starting playback.
+        player.pause()
     }
 
     private func openExternalPlayer() {
