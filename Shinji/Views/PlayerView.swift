@@ -23,17 +23,24 @@ struct PlayerView: View {
         VStack(spacing: 14) {
             if preferredPlayer == "Shinji" || externalLaunchFailed {
                 VStack(spacing: 10) {
-                    MPVPlayerSurface(url: url, headers: headers, muted: isMuted, onStatus: { status in
-                        playbackDiagnostics = status
-                        isPreparingPlayback = false
-                    }, onError: { error in
-                        playbackError = error
-                        isPreparingPlayback = false
-                    })
-                        .id(mpvReloadID)
-                        .frame(maxWidth: .infinity)
-                        .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                        .background(.black)
+                    Group {
+                        if isFullscreen {
+                            Color.black
+                                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                        } else {
+                            MPVPlayerSurface(url: url, headers: headers, muted: isMuted, onStatus: { status in
+                                playbackDiagnostics = status
+                                isPreparingPlayback = false
+                            }, onError: { error in
+                                playbackError = error
+                                isPreparingPlayback = false
+                            })
+                            .id(mpvReloadID)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                    .background(.black)
                         .overlay {
                             if isPreparingPlayback {
                                 VStack(spacing: 10) {
