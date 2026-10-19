@@ -70,7 +70,7 @@ struct LibraryView: View {
             }
         }.map { item in
             ShowcaseItem(
-                id: item.id + "|" + item.addonName,
+                id: item.id,
                 title: item.name,
                 subtitle: item.addonName,
                 symbol: kind.symbol,
@@ -392,6 +392,56 @@ struct LibraryView: View {
                 }
             }
         }
+    }
+
+    private func catalogCard(_ item: ShowcaseItem) -> some View {
+        Button {
+            guard let catalogItem = addonStore.catalogItems.first(where: {
+                $0.id == item.id && $0.addonName == item.subtitle
+            }) else { return }
+            selectedItem = catalogItem
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .bottomLeading) {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(LinearGradient(colors: item.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                    if let posterURL = item.posterURL {
+                        AsyncImage(url: posterURL) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            LinearGradient(colors: item.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                        }
+                        .frame(width: 145, height: 190)
+                        .clipped()
+                    } else {
+                        Image(systemName: item.symbol)
+                            .font(.system(size: 38, weight: .light))
+                            .foregroundStyle(.white.opacity(0.88))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    Text("SHINJI SELECT")
+                        .font(.system(size: 8, weight: .black))
+                        .tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .padding(11)
+                }
+                .frame(width: 145, height: 190)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                Text(item.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(item.subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+            }
+            .frame(width: 145, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var streamURLSection: some View {
