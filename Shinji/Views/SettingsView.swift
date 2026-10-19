@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage("shinjiGlowHex") private var glowHex = "4936FF"
     @AppStorage("shinjiAppearance") private var appearance = "Dark"
     @AppStorage("shinjiPlaybackQuality") private var playbackQuality = "Auto"
+    @AppStorage("shinjiPreferredPlayer") private var preferredPlayer = "Shinji"
     @AppStorage("shinjiDownloadsEnabled") private var downloadsEnabled = true
     @AppStorage("shinjiParentalControls") private var parentalControls = false
 
@@ -157,6 +158,15 @@ struct SettingsView: View {
 
     private var playbackSettings: some View {
         Form {
+            Section("Preferred player") {
+                Picker("Play videos in", selection: $preferredPlayer) {
+                    Text("Shinji").tag("Shinji")
+                    Text("VLC").tag("VLC")
+                    Text("Outplayer").tag("Outplayer")
+                }
+                Text("VLC or Outplayer must be installed. If iOS cannot open the selected player, Shinji will offer its built-in player instead.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             Section("Playback quality") {
                 Picker("Default quality", selection: $playbackQuality) {
                     Text("Auto").tag("Auto")
