@@ -52,6 +52,8 @@ struct LibraryView: View {
     @State private var streamURL = ""
     @State private var showPlayer = false
     @State private var selectedFilter = "For You"
+    @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
+    @AppStorage("shinjiGlowHex") private var glowHex = "4936FF"
 
     private let filters = ["For You", "Popular", "Recently Added", "Action", "Drama"]
 
@@ -157,18 +159,18 @@ struct LibraryView: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color(red: 0.34, green: 0.09, blue: 0.63), Color(red: 0.13, green: 0.06, blue: 0.29), Color.black],
+                        colors: [Color(hex: glowHex).opacity(0.95), Color(hex: accentHex).opacity(0.24), Color.black],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
             Circle()
-                .fill(Color.purple.opacity(0.32))
+                .fill(Color(hex: accentHex).opacity(0.32))
                 .frame(width: 190, height: 190)
                 .blur(radius: 45)
                 .offset(x: 170, y: -70)
             Circle()
-                .fill(Color.blue.opacity(0.22))
+                .fill(Color(hex: glowHex).opacity(0.22))
                 .frame(width: 150, height: 150)
                 .blur(radius: 40)
                 .offset(x: 225, y: 20)
@@ -212,7 +214,7 @@ struct LibraryView: View {
         }
         .frame(height: 255)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color.purple.opacity(0.4), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Color(hex: accentHex).opacity(0.55), lineWidth: 1))
         .padding(.horizontal, 16)
     }
 
@@ -230,10 +232,10 @@ struct LibraryView: View {
                             .padding(.vertical, 9)
                             .background {
                                 Capsule().fill(selectedFilter == filter
-                                    ? LinearGradient(colors: [Color.purple, Color(red: 0.25, green: 0.2, blue: 0.75)], startPoint: .leading, endPoint: .trailing)
+                                    ? LinearGradient(colors: [Color(hex: accentHex), Color(hex: glowHex)], startPoint: .leading, endPoint: .trailing)
                                     : LinearGradient(colors: [Color.white.opacity(0.08), Color.white.opacity(0.08)], startPoint: .leading, endPoint: .trailing))
                             }
-                            .overlay(Capsule().stroke(selectedFilter == filter ? Color.purple.opacity(0.8) : Color.white.opacity(0.06), lineWidth: 1))
+                            .overlay(Capsule().stroke(selectedFilter == filter ? Color(hex: accentHex).opacity(0.8) : Color.white.opacity(0.06), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -256,7 +258,7 @@ struct LibraryView: View {
                 Spacer()
                 Image(systemName: "arrow.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.cyan)
+                    .foregroundStyle(Color(hex: accentHex))
             }
             .padding(.horizontal, 20)
 
@@ -314,7 +316,7 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "play.rectangle.on.rectangle")
-                    .foregroundStyle(Color.cyan)
+                    .foregroundStyle(Color(hex: accentHex))
                 Text("Play from a URL")
                     .font(.headline)
                     .foregroundStyle(.white)
@@ -328,7 +330,7 @@ struct LibraryView: View {
                 .autocorrectionDisabled()
                 .padding(13)
                 .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 13))
-                .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.purple.opacity(0.25), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(hex: accentHex).opacity(0.25), lineWidth: 1))
             Button {
                 showPlayer = true
             } label: {
@@ -336,7 +338,7 @@ struct LibraryView: View {
                     .font(.system(size: 14, weight: .bold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(LinearGradient(colors: [Color.purple, Color(red: 0.18, green: 0.25, blue: 0.88)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 14))
+                    .background(LinearGradient(colors: [Color(hex: accentHex), Color(hex: glowHex)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(.plain)
             .disabled(!isValidStreamURL)
