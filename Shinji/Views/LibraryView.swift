@@ -105,7 +105,18 @@ struct LibraryView: View {
                    url.host != nil {
                     PlayerView(url: url, title: "Stream")
                 } else {
-                    ContentUnavailableView("Invalid URL", systemImage: "exclamationmark.triangle", description: Text("Enter a valid HTTP or HTTPS stream URL and try again."))
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.secondary)
+                        Text("Invalid URL").font(.headline)
+                        Text("Enter a valid HTTP or HTTPS stream URL and try again.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
                 }
             }
         }
