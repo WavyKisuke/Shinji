@@ -172,9 +172,6 @@ struct LibraryView: View {
                         if let description = item.description, !description.isEmpty {
                             Text(description).font(.subheadline).foregroundStyle(.secondary)
                         }
-                        if let status = addonStore.streamStatus {
-                            Text(status).font(.footnote).foregroundStyle(.secondary)
-                        }
                         if addonStore.isLoadingStreams {
                             ProgressView("Checking source…")
                                 .frame(maxWidth: .infinity, alignment: .leading)
