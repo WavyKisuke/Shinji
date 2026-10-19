@@ -173,10 +173,12 @@ struct PlayerView: View {
         }
 
         if let event = item.errorLog()?.events.last {
-            if let status = event.errorStatusCode, status > 0 {
+            let status = event.errorStatusCode
+            if status > 0 {
                 details.append("HTTP status \(status)")
             }
-            if let domain = event.errorDomain, !domain.isEmpty {
+            let domain = event.errorDomain
+            if !domain.isEmpty {
                 details.append("Network error domain: \(domain)")
             }
             if let comment = event.errorComment, !comment.isEmpty {
