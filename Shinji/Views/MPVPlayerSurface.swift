@@ -157,9 +157,38 @@ struct MPVPlayerSurface: UIViewRepresentable {
     }
 }
 
+/// CAMetalLayer workaround for a MoltenVK behavior where drawableSize can be
+/// forced to 1x1 during presentation. If that value is accepted, the layer can
+/// remain black even though mpv reports the stream as loaded.
+final class MPVMetalLayer: CAMetalLayer {
+    override var drawableSize: CGSize {
+        get { super.drawableSize }
+        set {
+            if Int(newValue.width) > 1 && Int(newValue.height) > 1 {
+                super.drawableSize = newValue
+            }
+        }
+    }
+
+    /// MoltenVK may update this property from a worker thread, but iOS needs the
+    /// EDR state change to happen on the main thread.
+    override var wantsExtendedDynamicRangeContent: Bool {
+        get { super.wantsExtendedDynamicRangeContent }
+        set {
+            if Thread.isMainThread {
+                super.wantsExtendedDynamicRangeContent = newValue
+            } else {
+                DispatchQueue.main.sync {
+                    super.wantsExtendedDynamicRangeContent = newValue
+                }
+            }
+        }
+    }
+}
+
 final class MPVMetalView: UIView {
-    override class var layerClass: AnyClass { CAMetalLayer.self }
-    var metalLayer: CAMetalLayer { layer as! CAMetalLayer }
+    override class var layerClass: AnyClass { MPVMetalLayer.self }
+    var metalLayer: MPVMetalLayer { layer as! MPVMetalLayer }
     var onReadyForPlayback: (() -> Void)?
     private var didSignalReadyForPlayback = false
 
@@ -184,8 +213,8 @@ final class MPVMetalView: UIView {
         super.init(frame: frame)
         backgroundColor = .black
         metalLayer.pixelFormat = .bgra8Unorm
-        metalLayer.framebufferOnly = false
-        metalLayer.contentsScale = UIScreen.main.scale
+        metalLayer.framebufferOnly = true
+        metalLayer.contentsScale = UIScreen.main.nativeScale
         metalLayer.wantsExtendedDynamicRangeContent = true
     }
 
@@ -193,8 +222,8 @@ final class MPVMetalView: UIView {
         super.init(coder: coder)
         backgroundColor = .black
         metalLayer.pixelFormat = .bgra8Unorm
-        metalLayer.framebufferOnly = false
-        metalLayer.contentsScale = UIScreen.main.scale
+        metalLayer.framebufferOnly = true
+        metalLayer.contentsScale = UIScreen.main.nativeScale
         metalLayer.wantsExtendedDynamicRangeContent = true
     }
 }
