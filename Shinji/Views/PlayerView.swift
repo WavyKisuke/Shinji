@@ -87,6 +87,10 @@ struct PlayerView: View {
         .rotationEffect(.degrees(isFullscreen ? 90 : 0))
         .background(.black)
         .contentShape(Rectangle())
+        // The Metal-backed UIView can otherwise win UIKit hit-testing even though
+        // the SwiftUI overlay is visually above it. Let it receive taps only when
+        // the controls are hidden; when controls are visible, buttons own the touch.
+        .allowsHitTesting(!showControls || controlsLocked)
         .onTapGesture {
             guard playbackError == nil else { return }
             withAnimation(.easeInOut(duration: 0.18)) {
@@ -119,6 +123,7 @@ struct PlayerView: View {
         )
         .rotationEffect(.degrees(isFullscreen ? 90 : 0))
         .foregroundStyle(.white)
+        .contentShape(Rectangle())
         .transition(.opacity)
         .animation(.easeInOut(duration: 0.18), value: showControls)
     }
@@ -133,6 +138,7 @@ struct PlayerView: View {
                     .frame(width: 42, height: 42)
                     .background(.black.opacity(0.4), in: Circle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Close player")
 
             if !isFullscreen {
@@ -161,6 +167,7 @@ struct PlayerView: View {
                     .frame(width: 42, height: 42)
                     .background(.black.opacity(0.4), in: Circle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
 
             Button {
@@ -171,6 +178,7 @@ struct PlayerView: View {
                     .frame(width: 42, height: 42)
                     .background(.black.opacity(0.4), in: Circle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(controlsLocked ? "Unlock controls" : "More options")
         }
         .padding(.horizontal, 18)
@@ -225,8 +233,10 @@ struct PlayerView: View {
             HStack(spacing: 22) {
                 bottomButton("waveform", "Audio") { }
                 bottomButton("captions.bubble", "Subtitles") { }
-                bottomButton(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", "Mute") {
+                bottomButton(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", isMuted ? "Unmute" : "Mute") {
                     isMuted.toggle()
+                    sendCommand("set mute \(isMuted ? "yes" : "no")")
+                    scheduleHide()
                 }
                 bottomButton("gearshape", "Settings") { }
                 Spacer()
