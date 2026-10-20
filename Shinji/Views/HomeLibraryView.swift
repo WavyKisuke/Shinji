@@ -13,12 +13,6 @@ struct HomeLibraryView: View {
                 VStack(alignment: .leading, spacing: 26) {
                     header
                     keepWatchingSection
-                    libraryShortcut(title: "Movies", subtitle: "Browse your movie library", icon: "film") {
-                        UnifiedLibraryView(kind: .movies)
-                    }
-                    libraryShortcut(title: "TV Shows", subtitle: "Browse your series library", icon: "play.tv") {
-                        UnifiedLibraryView(kind: .tvShows)
-                    }
                 }
                 .padding(.top, 10)
                 .padding(.bottom, 28)
@@ -144,28 +138,6 @@ struct HomeLibraryView: View {
             }
         }
         .buttonStyle(.plain)
-    }
-
-    private func libraryShortcut<Destination: View>(title: String, subtitle: String, icon: String, @ViewBuilder destination: () -> Destination) -> some View {
-        NavigationLink(destination: destination()) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(.system(size: 21, weight: .semibold))
-                    .frame(width: 46, height: 46)
-                    .background(Color(hex: accentHex).opacity(0.18), in: RoundedRectangle(cornerRadius: 13))
-                    .foregroundStyle(Color(hex: accentHex))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.headline).foregroundStyle(.white)
-                    Text(subtitle).font(.caption).foregroundStyle(.white.opacity(0.5))
-                }
-                Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(.white.opacity(0.4))
-            }
-            .padding(16)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 20)
     }
 
     private func formatTime(_ seconds: Double) -> String {
