@@ -52,25 +52,30 @@ final class OrientationLockCoordinator {
     }
 
     private func setPlayerOrientation(landscape: Bool) {
-        let nextOrientations: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
-        supportedOrientations = nextOrientations
+        supportedOrientations = landscape ? .landscape : .portrait
+
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else { return }
+
+        // Tell the current root controller about the new mask before requesting
+        // the geometry change. This is important on iOS 16+ when the app starts
+        // with portrait-only support.
+        windowScene.windows.forEach { $0.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations() }
 
         if #available(iOS 16.0, *) {
-            let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: nextOrientations)
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .forEach { scene in
-                    scene.requestGeometryUpdate(preferences) { error in
-                        print("[OrientationLockCoordinator] Geometry update failed: \(error.localizedDescription)")
-                    }
+            let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: supportedOrientations)
+            windowScene.requestGeometryUpdate(preferences) { error in
+                if let error {
+                    print("[OrientationLockCoordinator] Geometry update failed: \(error.localizedDescription)")
                 }
+            }
 
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .flatMap(\.windows)
-                .forEach { window in
-                    window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-                }
+            // Some iOS/device combinations need an explicit rotation request as
+            // well as the scene geometry update to immediately honor the change.
+            let orientation: UIInterfaceOrientation = landscape ? preferredLandscapeOrientation : .portrait
+            UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
+            UIViewController.attemptRotationToDeviceOrientation()
         } else {
             let orientation: UIInterfaceOrientation = landscape ? preferredLandscapeOrientation : .portrait
             UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
@@ -79,18 +84,17 @@ final class OrientationLockCoordinator {
     }
 
     private var preferredLandscapeOrientation: UIInterfaceOrientation {
-        if let sceneOrientation = UIApplication.shared.connectedScenes
-            .compactMap({ ($0 as? UIWindowScene)?.interfaceOrientation })
-            .first(where: { $0.isLandscape }) {
-            return sceneOrientation
-        }
-
         switch UIDevice.current.orientation {
         case .landscapeLeft:
-            return .landscapeRight
-        case .landscapeRight:
             return .landscapeLeft
+        case .landscapeRight:
+            return .landscapeRight
         default:
+            if let sceneOrientation = UIApplication.shared.connectedScenes
+                .compactMap({ ($0 as? UIWindowScene)?.interfaceOrientation })
+                .first(where: { $0.isLandscape }) {
+                return sceneOrientation
+            }
             return .landscapeRight
         }
     }
