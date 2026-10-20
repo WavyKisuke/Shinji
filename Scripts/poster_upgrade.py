@@ -8,21 +8,12 @@ def replace_once(path, old, new):
         text = text.replace(old, new, 1)
         p.write_text(text, encoding="utf-8")
 
-# Carry the poster URL from the catalog title into playback/resume storage.
 player = "Shinji/Views/PlayerView.swift"
 replace_once(
     player,
     '    var headers: [String: String] = [:]\n',
     '    var headers: [String: String] = [:]\n    var posterURL: URL? = nil\n',
 )
-replace_once(
-    player,
-    'headers: headers)\n',
-    'headers: headers, posterURL: posterURL?.absoluteString)\n',
-)
-
-# The build repair script injects the Continue Watching state and record calls;
-# update those injected calls as well so poster metadata is persisted.
 text = Path(player).read_text(encoding="utf-8")
 text = text.replace(
     'continueStore.record(id: url.absoluteString, title: title, url: url, position: time, duration: total, headers: headers)',
@@ -34,8 +25,6 @@ text = text.replace(
 )
 Path(player).write_text(text, encoding="utf-8")
 
-# Pass the selected catalog poster into PlayerView. The selected item is cleared
-# before playback, so retain the poster separately in state.
 unified = "Shinji/Views/UnifiedLibraryView.swift"
 replace_once(
     unified,
@@ -49,13 +38,11 @@ replace_once(
 )
 replace_once(
     unified,
-    '                                    selectedStreamURL = option.url; selectedItem = nil\n',
-    '                                    selectedStreamURL = option.url; selectedPosterURL = item.posterURL; selectedItem = nil\n',
+    '                                    selectedStreamURL = option.url\n                                    selectedItem = nil\n',
+    '                                    selectedStreamURL = option.url\n                                    selectedPosterURL = item.posterURL\n                                    selectedItem = nil\n',
 )
 Path(unified).write_text(Path(unified).read_text(encoding="utf-8"), encoding="utf-8")
 
-# Show the real poster in the Library Keep Watching cards and preserve it when
-# reopening playback.
 home = "Shinji/Views/HomeLibraryView.swift"
 replace_once(
     home,
