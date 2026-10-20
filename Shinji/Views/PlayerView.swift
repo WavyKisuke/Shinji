@@ -25,12 +25,28 @@ struct PlayerView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
+                // Keep the native MPV view completely out of SwiftUI hit testing.
+                // A separate transparent SwiftUI layer below the controls handles taps.
                 playerSurface()
                     .zIndex(0)
+                    .allowsHitTesting(false)
+
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard playbackError == nil else { return }
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            showControls.toggle()
+                        }
+                        if showControls { scheduleHide() } else { hideControlsTask?.cancel() }
+                    }
+                    .zIndex(1)
+                    .allowsHitTesting(playbackError == nil)
 
                 if showControls && !controlsLocked {
                     controlsOverlay()
                         .zIndex(10)
+                        .allowsHitTesting(true)
                 }
 
                 if isPreparingPlayback && playbackError == nil {
@@ -96,15 +112,6 @@ struct PlayerView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
-        .contentShape(Rectangle())
-        // The MPV UIView is made non-interactive so SwiftUI owns all player controls.
-        .onTapGesture {
-            guard playbackError == nil else { return }
-            withAnimation(.easeInOut(duration: 0.18)) {
-                showControls.toggle()
-            }
-            if showControls { scheduleHide() } else { hideControlsTask?.cancel() }
-        }
     }
 
     private func controlsOverlay() -> some View {
@@ -126,7 +133,6 @@ struct PlayerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(.white)
-        .contentShape(Rectangle())
         .transition(.opacity)
         .animation(.easeInOut(duration: 0.18), value: showControls)
     }
@@ -165,7 +171,7 @@ struct PlayerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
 
-            Button { withAnimation { controlsLocked.toggle() } } label: {
+            Button { controlsLocked.toggle() } label: {
                 Image(systemName: controlsLocked ? "lock.fill" : "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
                     .frame(width: 42, height: 42)
