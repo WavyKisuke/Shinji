@@ -28,6 +28,9 @@ jobs:
       - name: Repair known Swift source issues
         run: python3 Scripts/fix_build_source.py
 
+      - name: Repair player controls
+        run: python3 Scripts/fix_player_controls.py
+
       - name: Ensure catalog metadata model
         run: python3 Scripts/fix_catalog_metadata.py
 
