@@ -11,8 +11,8 @@ text = text.replace(
     'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])'
 )
 
-# Add a dedicated playback-speed control. It uses mpv's documented runtime
-# `speed` property instead of trying to emulate speed changes with seeks.
+# Add a dedicated playback-speed control once, while keeping this build repair
+# script idempotent across repeated CI runs.
 if 'showPlaybackSpeed' not in text:
     text = text.replace(
         '    @State private var showSettings = false\n',
@@ -76,7 +76,6 @@ private struct PlaybackSpeedSheet: View {
 
 player.write_text(text, encoding="utf-8")
 
-# Keep the libmpv argv buffer mutable for the current Libmpv toolchain.
 mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
 mpv_text = mpv.read_text(encoding="utf-8")
 old = '''    private func execute(_ arguments: [String], on handle: OpaquePointer) {
