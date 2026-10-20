@@ -99,9 +99,7 @@ final class OrientationLockCoordinator {
         if #available(iOS 16.0, *) {
             let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: supportedOrientations)
             windowScene.requestGeometryUpdate(preferences) { error in
-                if let error {
-                    print("[OrientationLockCoordinator] Geometry update failed: \(error.localizedDescription)")
-                }
+                print("[OrientationLockCoordinator] Geometry update: \(error.localizedDescription)")
             }
         }
 
