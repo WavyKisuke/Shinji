@@ -17,7 +17,6 @@ text = text.replace(
 )
 
 # Add a dedicated playback-speed control if the source does not already have one.
-# The speed sheet uses mpv's documented `set speed <value>` property command.
 if 'showPlaybackSpeed' not in text:
     text = text.replace(
         '    @State private var showSettings = false\n',
@@ -71,10 +70,9 @@ private struct PlaybackSpeedSheet: View {
         }
     }
 }
-
 '''
     if marker in text:
-        text = text.replace(marker, '\n' + speed_sheet + 'private struct PlayerSettingsSheet: View {', 1)
+        text = text.replace(marker, '\n' + speed_sheet + '\nprivate struct PlayerSettingsSheet: View {', 1)
 
 player.write_text(text, encoding="utf-8")
 
