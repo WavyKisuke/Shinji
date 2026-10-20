@@ -3,7 +3,7 @@ import SwiftUI
 struct MainTabView: View {
     var body: some View {
         TabView {
-            LibraryView(kind: .movies)
+            UnifiedLibraryView()
                 .tabItem { Label("Movies & TV", systemImage: "play.tv") }
             LibraryView(kind: .live)
                 .tabItem { Label("Live TV", systemImage: "dot.radiowaves.left.and.right") }
