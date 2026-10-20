@@ -52,18 +52,21 @@ struct PlayerView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .navigationBarHidden(true)
-        .toolbar(isFullscreen ? .hidden : .visible, for: .tabBar)
+        .toolbar(.hidden, for: .tabBar)
         .onAppear {
+            hideParentTabBar(true)
             startInternalPlayback()
         }
         .onChange(of: isFullscreen) { fullscreen in
             OrientationLockCoordinator.setPlayerFullscreen(fullscreen)
+            hideParentTabBar(true)
             showControls = true
             scheduleHide()
         }
         .onDisappear {
             hideControlsTask?.cancel()
             OrientationLockCoordinator.setPlayerFullscreen(false)
+            hideParentTabBar(false)
         }
     }
 
@@ -94,10 +97,7 @@ struct PlayerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
         .contentShape(Rectangle())
-        // Keep one MPV/Metal surface for both portrait and fullscreen. The device
-        // orientation changes the available geometry instead of rotating/resizing
-        // the Metal view manually, which avoids the fullscreen crash/resource issue.
-        .allowsHitTesting(!showControls || controlsLocked)
+        // The MPV UIView is made non-interactive so SwiftUI owns all player controls.
         .onTapGesture {
             guard playbackError == nil else { return }
             withAnimation(.easeInOut(duration: 0.18)) {
@@ -133,9 +133,7 @@ struct PlayerView: View {
 
     private var topBar: some View {
         HStack(spacing: 14) {
-            Button {
-                dismiss()
-            } label: {
+            Button { dismiss() } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 18, weight: .semibold))
                     .frame(width: 42, height: 42)
@@ -158,9 +156,7 @@ struct PlayerView: View {
 
             Spacer()
 
-            Button {
-                isFullscreen.toggle()
-            } label: {
+            Button { isFullscreen.toggle() } label: {
                 Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 17, weight: .semibold))
                     .frame(width: 42, height: 42)
@@ -169,9 +165,7 @@ struct PlayerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
 
-            Button {
-                withAnimation { controlsLocked.toggle() }
-            } label: {
+            Button { withAnimation { controlsLocked.toggle() } } label: {
                 Image(systemName: controlsLocked ? "lock.fill" : "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
                     .frame(width: 42, height: 42)
@@ -187,7 +181,6 @@ struct PlayerView: View {
     private var centerControls: some View {
         HStack(spacing: 46) {
             seekButton(seconds: -10)
-
             Button {
                 sendCommand("cycle pause")
                 isPlaying.toggle()
@@ -200,7 +193,6 @@ struct PlayerView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
-
             seekButton(seconds: 10)
         }
         .shadow(radius: 8)
@@ -209,9 +201,7 @@ struct PlayerView: View {
     private var bottomControls: some View {
         VStack(spacing: 9) {
             HStack(spacing: 10) {
-                Text(formatTime(position))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.86))
+                Text(formatTime(position)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
                 Slider(
                     value: Binding(
                         get: { duration > 0 ? min(position, duration) : 0 },
@@ -224,9 +214,7 @@ struct PlayerView: View {
                     in: 0...max(duration, 1)
                 )
                 .tint(.white)
-                Text(formatTime(duration))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.86))
+                Text(formatTime(duration)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
             }
 
             HStack(spacing: 22) {
@@ -239,9 +227,7 @@ struct PlayerView: View {
                 }
                 bottomButton("gearshape", "Settings") { }
                 Spacer()
-                Text("Shinji")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.5))
+                Text("Shinji").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.5))
             }
         }
         .padding(.horizontal, 18)
@@ -251,17 +237,13 @@ struct PlayerView: View {
     private func seekButton(seconds: Int) -> some View {
         Button {
             sendCommand("seek \(seconds) relative")
-            if duration > 0 {
-                position = max(0, min(duration, position + Double(seconds)))
-            }
+            if duration > 0 { position = max(0, min(duration, position + Double(seconds))) }
             scheduleHide()
         } label: {
             ZStack {
                 Image(systemName: seconds < 0 ? "gobackward" : "goforward")
                     .font(.system(size: 24, weight: .semibold))
-                Text("10")
-                    .font(.system(size: 8, weight: .bold))
-                    .offset(y: 1)
+                Text("10").font(.system(size: 8, weight: .bold)).offset(y: 1)
             }
             .frame(width: 54, height: 54)
             .background(.black.opacity(0.3), in: Circle())
@@ -271,9 +253,7 @@ struct PlayerView: View {
 
     private func bottomButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 17, weight: .medium))
-                .frame(width: 32, height: 32)
+            Image(systemName: icon).font(.system(size: 17, weight: .medium)).frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -283,12 +263,8 @@ struct PlayerView: View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle.fill").font(.title)
             Text("Couldn't play this stream").font(.headline)
-            Text(message)
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.72))
-                .multilineTextAlignment(.center)
-            Button("Try Again") { startInternalPlayback() }
-                .buttonStyle(.borderedProminent)
+            Text(message).font(.footnote).foregroundStyle(.white.opacity(0.72)).multilineTextAlignment(.center)
+            Button("Try Again") { startInternalPlayback() }.buttonStyle(.borderedProminent)
         }
         .foregroundStyle(.white)
         .padding(28)
@@ -322,10 +298,18 @@ struct PlayerView: View {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    showControls = false
-                }
+                withAnimation(.easeInOut(duration: 0.18)) { showControls = false }
             }
+        }
+    }
+
+    private func hideParentTabBar(_ hidden: Bool) {
+        DispatchQueue.main.async {
+            guard let root = UIApplication.shared.connectedScenes
+                .compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController })
+                .first,
+                let tabBarController = root.firstTabBarController() else { return }
+            tabBarController.tabBar.isHidden = hidden
         }
     }
 
@@ -335,9 +319,18 @@ struct PlayerView: View {
         let hours = total / 3600
         let minutes = (total % 3600) / 60
         let secs = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        }
+        if hours > 0 { return String(format: "%d:%02d:%02d", hours, minutes, secs) }
         return String(format: "%d:%02d", minutes, secs)
+    }
+}
+
+private extension UIViewController {
+    func firstTabBarController() -> UITabBarController? {
+        if let tab = self as? UITabBarController { return tab }
+        for child in children {
+            if let tab = child.firstTabBarController() { return tab }
+        }
+        if let presented = presentedViewController, let tab = presented.firstTabBarController() { return tab }
+        return nil
     }
 }
