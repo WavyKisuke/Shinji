@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050505"/>
+      <stop offset="1" stop-color="#151515"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd36a"/>
+      <stop offset="0.5" stop-color="#ff9d1a"/>
+      <stop offset="1" stop-color="#ff5b00"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1f1f1"/>
+      <stop offset="0.45" stop-color="#777777"/>
+      <stop offset="1" stop-color="#2f2f2f"/>
+    </linearGradient>
+  </defs>
+  <rect x="40" y="40" width="944" height="944" rx="210" fill="url(#bg)"/>
+  <path d="M690 230c-105-74-268-72-357 14-79 76-43 175 62 214l168 63c70 26 91 75 46 112-55 46-182 44-278-15" fill="none" stroke="url(#metal)" stroke-width="86" stroke-linecap="round"/>
+  <path d="M697 235c-42-29-88-43-135-43" fill="none" stroke="url(#accent)" stroke-width="34" stroke-linecap="round"/>
+  <path d="M355 792c108 73 271 70 357-14 75-73 40-170-65-209l-158-59" fill="none" stroke="url(#metal)" stroke-width="86" stroke-linecap="round"/>
+  <path d="M455 407l170 105-170 105z" fill="url(#accent)"/>
+  <circle cx="305" cy="425" r="18" fill="#111"/>
+  <circle cx="305" cy="599" r="18" fill="#111"/>
+</svg>
