@@ -36,3 +36,5 @@ The app validates manifest metadata and endpoint schemes. Downloaded code is nev
 
 ## Current limitations
 This is a starter template, not a complete streaming service. It does not yet include a real catalog aggregator, XMLTV guide, profiles, parental controls, offline downloads, episode calendar, source fallback, or full subtitle/audio-track controls. Playback depends on the URL format, provider access, and any DRM requirements. Only use content and sources you are authorized to access.
+
+<!-- Build trigger: 2026-10-19 latest IPA -->
