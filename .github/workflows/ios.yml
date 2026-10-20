@@ -28,6 +28,9 @@ jobs:
       - name: Repair known Swift source issues
         run: python3 Scripts/fix_build_source.py
 
+      - name: Repair Featured Picks page
+        run: python3 Scripts/fix_featured_page.py
+
       - name: Add Keep Watching poster support
         run: python3 Scripts/poster_upgrade.py
 
