@@ -8,6 +8,7 @@ struct ContinueWatchingItem: Identifiable, Codable, Equatable {
     var position: Double
     var duration: Double
     var headers: [String: String]
+    var posterURL: String?
     var updatedAt: Date
 }
 
@@ -23,13 +24,13 @@ final class ContinueWatchingStore: ObservableObject {
         items.first(where: { $0.id == id })
     }
 
-    func record(id: String, title: String, url: URL, position: Double, duration: Double, headers: [String: String] = [:]) {
+    func record(id: String, title: String, url: URL, position: Double, duration: Double, headers: [String: String] = [:], posterURL: String? = nil) {
         guard duration > 0, position >= 0 else { return }
         if position / duration >= 0.95 {
             remove(id: id)
             return
         }
-        let value = ContinueWatchingItem(id: id, title: title, url: url.absoluteString, position: position, duration: duration, headers: headers, updatedAt: Date())
+        let value = ContinueWatchingItem(id: id, title: title, url: url.absoluteString, position: position, duration: duration, headers: headers, posterURL: posterURL, updatedAt: Date())
         items.removeAll { $0.id == id }
         items.insert(value, at: 0)
         items = Array(items.prefix(20))
