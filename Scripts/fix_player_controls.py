@@ -4,46 +4,32 @@ player = Path("Shinji/Views/PlayerView.swift")
 text = player.read_text(encoding="utf-8")
 text = text.replace('["cycle", "aid"]', '["cycle", "audio"]')
 text = text.replace('["cycle", "sid"]', '["cycle", "sub"]')
-text = text.replace(
-    'sendCommand(["cycle", "pause"])',
-    'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])'
-)
+text = text.replace('sendCommand(["cycle", "pause"])', 'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])')
 
 if 'showPlaybackSpeed' not in text:
-    text = text.replace(
-        '    @State private var showSettings = false\n',
-        '    @State private var showSettings = false\n    @State private var showPlaybackSpeed = false\n', 1
-    )
-    text = text.replace(
-        '        .sheet(isPresented: $showSettings) {\n',
-        '''        .sheet(isPresented: $showPlaybackSpeed) {
+    text = text.replace('    @State private var showSettings = false\n', '    @State private var showSettings = false\n    @State private var showPlaybackSpeed = false\n', 1)
+    text = text.replace('        .sheet(isPresented: $showSettings) {\n', '''        .sheet(isPresented: $showPlaybackSpeed) {
             PlaybackSpeedSheet(sendCommand: sendCommand)
                 .presentationDetents([.height(300)])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSettings) {
-''', 1
-    )
-    text = text.replace(
-        '                bottomButton("gearshape", "Settings") { showSettings = true }\n',
-        '''                bottomButton("speedometer", "Playback Speed") {
+''', 1)
+    text = text.replace('                bottomButton("gearshape", "Settings") { showSettings = true }\n', '''                bottomButton("speedometer", "Playback Speed") {
                     showPlaybackSpeed = true
                 }
                 bottomButton("gearshape", "Settings") { showSettings = true }
-''', 1
-    )
+''', 1)
     marker = '\nprivate struct PlayerSettingsSheet: View {'
     speed_sheet = '''
 
 private struct PlaybackSpeedSheet: View {
     let sendCommand: ([String]) -> Void
     @Environment(\\.dismiss) private var dismiss
-
     private let speeds: [(String, String)] = [
         ("0.5×", "0.5"), ("0.75×", "0.75"), ("Normal", "1"),
         ("1.25×", "1.25"), ("1.5×", "1.5"), ("1.75×", "1.75"), ("2×", "2")
     ]
-
     var body: some View {
         NavigationStack {
             List {
@@ -61,7 +47,6 @@ private struct PlaybackSpeedSheet: View {
 '''
     if marker in text:
         text = text.replace(marker, speed_sheet + 'private struct PlayerSettingsSheet: View {', 1)
-
 player.write_text(text, encoding="utf-8")
 
 mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
