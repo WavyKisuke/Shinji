@@ -19,22 +19,26 @@ text = text.replace(
     '    private let filters = ["For You", "Popular", "Recently Added"]',
 )
 
-# Match against the actual catalog genre metadata, not just the title or
-# description. The old implementation made Action/Drama filters depend on a
-# word appearing in the title/description, which could leave only one result.
+# Match against normalized catalog genre metadata. Also fall back to the
+# title/description so catalogs that omit structured genre fields still get
+# useful filtering instead of silently returning a single item.
 old_matches = '''    private func matches(_ item: AddonCatalogItem, genre: String) -> Bool {
         let text = "\\(item.name) \\(item.description ?? "")"
         return text.localizedCaseInsensitiveContains(genre)
     }
 '''
 new_matches = '''    private func matches(_ item: AddonCatalogItem, genre: String) -> Bool {
-        if item.genres.contains(where: { $0.localizedCaseInsensitiveCompare(genre) == .orderedSame }) {
+        let wanted = genre.trimmingCharacters(in: .whitespacesAndNewlines)
+        if item.genres.contains(where: { stored in
+            let value = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.localizedCaseInsensitiveCompare(wanted) == .orderedSame
+                || value.localizedCaseInsensitiveContains(wanted)
+                || wanted.localizedCaseInsensitiveContains(value)
+        }) {
             return true
         }
-        let normalizedGenre = genre.trimmingCharacters(in: .whitespacesAndNewlines)
-        return item.genres.contains { stored in
-            stored.localizedCaseInsensitiveContains(normalizedGenre) || normalizedGenre.localizedCaseInsensitiveContains(stored)
-        }
+        let text = "\\(item.name) \\(item.description ?? "")"
+        return text.localizedCaseInsensitiveContains(wanted)
     }
 '''
 text = text.replace(old_matches, new_matches, 1)
@@ -90,13 +94,13 @@ stream_title_replacement = '''                    HStack(alignment: .top, spacin
                     Text(watchlistStore.contains(catalogID: item.id, addonName: item.addonName) ? "Saved to My List — watch it later." : "Save this title to My List so you can watch it later.")
                         .font(.caption)
                         .foregroundStyle(Color(hex: accentHex))
-                    if let description = item.description, !item.description!.isEmpty {
+                    if let description = item.description, !description.isEmpty {
 '''
 text = text.replace(stream_title_anchor, stream_title_replacement, 1)
 unified.write_text(text, encoding="utf-8")
 
-# Carry genre metadata from Stremio catalog responses into the model so the
-# UI can return every movie in a selected genre.
+# Carry genre metadata from Stremio catalog responses into the model. Sources
+# are inconsistent: some use genres:[String], genre:[String], or genre:String.
 addon = Path("Shinji/Services/AddonStore.swift")
 addon_text = addon.read_text(encoding="utf-8")
 addon_text = addon_text.replace(
@@ -107,14 +111,18 @@ addon_text = addon_text.replace(
 addon_text = addon_text.replace(
     '            let poster = (meta["poster"] as? String).flatMap(URL.init(string:))\n            return AddonCatalogItem(\n',
     '''            let poster = (meta["poster"] as? String).flatMap(URL.init(string:))
-            let genres: [String]
+            var genres: [String] = []
             if let values = meta["genres"] as? [String] {
-                genres = values
-            } else if let value = meta["genre"] as? String {
-                genres = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            } else {
-                genres = []
+                genres.append(contentsOf: values)
+            } else if let value = meta["genres"] as? String {
+                genres.append(contentsOf: value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
             }
+            if let values = meta["genre"] as? [String] {
+                genres.append(contentsOf: values)
+            } else if let value = meta["genre"] as? String {
+                genres.append(contentsOf: value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            }
+            genres = Array(Set(genres.filter { !$0.isEmpty }))
             return AddonCatalogItem(
 ''',
     1,
