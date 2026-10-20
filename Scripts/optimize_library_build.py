@@ -7,7 +7,7 @@ replacements = {
     'import SwiftUI\n':
         'import SwiftUI\nimport UIKit\nimport ImageIO\n',
     'struct UnifiedLibraryView: View {':
-        '''enum MediaLibraryKind {\n    case movies\n    case tvShows\n}\n\nstruct UnifiedLibraryView: View {\n    let kind: MediaLibraryKind\n''',
+        '''enum MediaLibraryKind: Equatable {\n    case movies\n    case tvShows\n}\n\nstruct UnifiedLibraryView: View {\n    let kind: MediaLibraryKind\n''',
     'private let filters = ["For You", "Popular", "Recently Added", "Action", "Drama"]':
         'private let filters = ["For You", "Popular", "Recently Added"]',
     '''        addonStore.catalogItems.filter { item in\n            ["movie", "series"].contains(item.type.lowercased())\n        }''':
@@ -36,15 +36,11 @@ if old_poster in s:
 if "private struct CachedPosterImage" not in s:
     s += '''\n\nprivate enum PosterImageCache {\n    static let images: NSCache<NSURL, UIImage> = {\n        let cache = NSCache<NSURL, UIImage>()\n        cache.countLimit = 160\n        cache.totalCostLimit = 64 * 1024 * 1024\n        return cache\n    }()\n}\n\nprivate struct CachedPosterImage<Placeholder: View>: View {\n    let url: URL\n    let targetSize: CGSize\n    @ViewBuilder let placeholder: () -> Placeholder\n    @State private var image: UIImage?\n\n    var body: some View {\n        Group {\n            if let image {\n                Image(uiImage: image)\n                    .resizable()\n                    .scaledToFill()\n            } else {\n                placeholder()\n            }\n        }\n        .task(id: url) { await load() }\n    }\n\n    private func load() async {\n        if let cached = PosterImageCache.images.object(forKey: url as NSURL) {\n            image = cached\n            return\n        }\n        do {\n            let (data, _) = try await URLSession.shared.data(from: url)\n            guard !Task.isCancelled, let source = CGImageSourceCreateWithData(data as CFData, nil) else { return }\n            let options: [CFString: Any] = [\n                kCGImageSourceCreateThumbnailFromImageAlways: true,\n                kCGImageSourceCreateThumbnailWithTransform: true,\n                kCGImageSourceThumbnailMaxPixelSize: max(targetSize.width, targetSize.height)\n            ]\n            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return }\n            let decoded = UIImage(cgImage: cgImage)\n            let cost = decoded.cgImage.map { $0.bytesPerRow * $0.height } ?? 0\n            PosterImageCache.images.setObject(decoded, forKey: url as NSURL, cost: cost)\n            guard !Task.isCancelled else { return }\n            image = decoded\n        } catch { }\n    }\n}\n'''
 
-path.write_text(s, encoding="utf-8")
-
-# Keep the player/orientation optimization idempotent: the player may already
-# contain the Nuvio-style lifecycle hook from an earlier commit.
 player_path = Path("Shinji/Views/PlayerView.swift")
 p = player_path.read_text(encoding="utf-8")
 old_player_orientation_start = '            UIDevice.current.beginGeneratingDeviceOrientationNotifications()\n            hideParentTabBar(true)'
 new_player_orientation_start = '            UIDevice.current.beginGeneratingDeviceOrientationNotifications()\n            OrientationLockCoordinator.playerDidAppear()\n            hideParentTabBar(true)'
 if old_player_orientation_start in p:
     p = p.replace(old_player_orientation_start, new_player_orientation_start, 1)
-path.write_text(s, encoding="utf-8") if False else None
 player_path.write_text(p, encoding="utf-8")
+path.write_text(s, encoding="utf-8")
