@@ -20,6 +20,9 @@ struct PlayerView: View {
     @State private var command: [String]?
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var controlsLocked = false
+    @State private var showUnlockButton = false
+    @State private var isScrubbing = false
+    @State private var ignorePositionUpdatesUntil = Date.distantPast
     @State private var showSettings = false
 
     var body: some View {
@@ -30,17 +33,15 @@ struct PlayerView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { toggleControls() }
 
-                if showControls {
+                if showControls && !controlsLocked {
                     controlsOverlay()
                         .zIndex(10)
                         .allowsHitTesting(true)
                 }
 
-                if controlsLocked {
+                if controlsLocked && showUnlockButton {
                     Button {
-                        controlsLocked = false
-                        showControls = true
-                        scheduleHide()
+                        unlockControls()
                     } label: {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 15, weight: .semibold))
@@ -92,8 +93,10 @@ struct PlayerView: View {
         .onChange(of: isFullscreen) { fullscreen in
             OrientationLockCoordinator.setPlayerFullscreen(fullscreen)
             hideParentTabBar(true)
-            showControls = true
-            scheduleHide()
+            if !controlsLocked {
+                showControls = true
+                scheduleHide()
+            }
         }
         .sheet(isPresented: $showSettings) {
             PlayerSettingsSheet(sendCommand: sendCommand)
@@ -111,14 +114,31 @@ struct PlayerView: View {
     private func toggleControls() {
         guard playbackError == nil else { return }
         if controlsLocked {
-            controlsLocked = false
-            showControls = true
-            scheduleHide()
+            // While locked, a tap only reveals/hides the unlock button; it never unlocks.
+            withAnimation(.easeInOut(duration: 0.18)) { showUnlockButton.toggle() }
+            if showUnlockButton { scheduleHide() } else { hideControlsTask?.cancel() }
             return
         }
 
         withAnimation(.easeInOut(duration: 0.18)) { showControls.toggle() }
         if showControls { scheduleHide() } else { hideControlsTask?.cancel() }
+    }
+
+    private func lockControls() {
+        hideControlsTask?.cancel()
+        controlsLocked = true
+        withAnimation(.easeInOut(duration: 0.18)) {
+            showControls = false
+            showUnlockButton = true
+        }
+        scheduleHide()
+    }
+
+    private func unlockControls() {
+        controlsLocked = false
+        showUnlockButton = false
+        showControls = true
+        scheduleHide()
     }
 
     private func playerSurface() -> some View {
@@ -139,7 +159,8 @@ struct PlayerView: View {
                 isPreparingPlayback = false
             },
             onPlaybackUpdate: { time, total, paused in
-                position = time
+                // Don't let mpv's position fight the slider while scrubbing or just after a seek.
+                if !isScrubbing && Date() >= ignorePositionUpdatesUntil { position = time }
                 duration = total
                 isPlaying = !paused
                 if total > 0 { isPreparingPlayback = false }
@@ -206,9 +227,7 @@ struct PlayerView: View {
             .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
 
             Button {
-                controlsLocked = true
-                showControls = true
-                hideControlsTask?.cancel()
+                lockControls()
             } label: {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 17, weight: .semibold))
@@ -251,10 +270,23 @@ struct PlayerView: View {
                         set: { newValue in
                             guard duration > 0 else { return }
                             position = newValue
-                            sendCommand(["seek", String(newValue), "absolute"])
                         }
                     ),
-                    in: 0...max(duration, 1)
+                    in: 0...max(duration, 1),
+                    onEditingChanged: { editing in
+                        if editing {
+                            isScrubbing = true
+                            hideControlsTask?.cancel()
+                        } else {
+                            // Seek once on release instead of flooding mpv on every drag tick.
+                            if duration > 0 {
+                                ignorePositionUpdatesUntil = Date().addingTimeInterval(0.7)
+                                sendCommand(["seek", String(position), "absolute"])
+                            }
+                            isScrubbing = false
+                            scheduleHide()
+                        }
+                    }
                 )
                 .tint(.white)
                 .contentShape(Rectangle())
@@ -288,7 +320,10 @@ struct PlayerView: View {
     private func seekButton(seconds: Int) -> some View {
         Button {
             sendCommand(["seek", String(seconds), "relative"])
-            if duration > 0 { position = max(0, min(duration, position + Double(seconds))) }
+            if duration > 0 {
+                position = max(0, min(duration, position + Double(seconds)))
+                ignorePositionUpdatesUntil = Date().addingTimeInterval(0.7)
+            }
             scheduleHide()
         } label: {
             ZStack {
@@ -336,6 +371,8 @@ struct PlayerView: View {
         duration = 0
         showControls = true
         controlsLocked = false
+        showUnlockButton = false
+        isScrubbing = false
         if reloadStream {
             sendCommand(["loadfile", url.absoluteString, "replace"])
         } else {
@@ -353,13 +390,15 @@ struct PlayerView: View {
 
     private func scheduleHide() {
         hideControlsTask?.cancel()
-        showControls = true
+        if controlsLocked { showUnlockButton = true } else { showControls = true }
         hideControlsTask = Task {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                guard !controlsLocked else { return }
-                withAnimation(.easeInOut(duration: 0.18)) { showControls = false }
+                guard !isScrubbing else { return }
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    if controlsLocked { showUnlockButton = false } else { showControls = false }
+                }
             }
         }
     }
