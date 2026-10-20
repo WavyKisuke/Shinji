@@ -40,6 +40,9 @@ jobs:
       - name: Polish player fullscreen and seek gestures
         run: python3 Scripts/fix_player_polish.py
 
+      - name: Fix player control hit testing and MPV commands
+        run: python3 Scripts/fix_player_hit_testing.py
+
       - name: Ensure catalog metadata model
         run: python3 Scripts/fix_catalog_metadata.py
 
