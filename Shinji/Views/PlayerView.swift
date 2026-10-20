@@ -305,7 +305,7 @@ private struct PlayerSettingsSheet: View {
     let sendCommand: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    private let playbackSpeeds: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
+    private let playbackSpeeds: [Double] = [1.0, 1.25, 1.5, 2.0, 3.0, 4.0]
 
     var body: some View {
         NavigationStack {
@@ -315,11 +315,19 @@ private struct PlayerSettingsSheet: View {
                     Button("Original Size") { sendCommand("set video-unscaled yes"); dismiss() }
                     Button("Reset Video Zoom") { sendCommand("set video-zoom 0"); dismiss() }
                 }
-                Section("Playback") {
-                    Menu("Playback Speed") {
-                        ForEach(playbackSpeeds, id: \.self) { speed in
-                            Button(speedLabel(speed)) {
-                                sendCommand("set speed \(speed)")
+                Section("Playback Speed") {
+                    ForEach(playbackSpeeds, id: \.self) { speed in
+                        Button {
+                            sendCommand("set speed \(speed)")
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(speed == 1.0 ? "1×" : "\(speed.formatted(.number.precision(.fractionLength(0...2))))×")
+                                if speed == 1.0 {
+                                    Spacer()
+                                    Text("Normal")
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -328,11 +336,6 @@ private struct PlayerSettingsSheet: View {
             .navigationTitle("Player Settings")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
-    }
-
-    private func speedLabel(_ speed: Double) -> String {
-        if speed == 1.0 { return "1× (Normal)" }
-        return speed.formatted(.number.precision(.fractionLength(0...2))) + "×"
     }
 }
 
