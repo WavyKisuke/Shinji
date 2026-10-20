@@ -58,7 +58,8 @@ struct LibraryView: View {
     @State private var selectedItem: AddonCatalogItem?
     @State private var selectedStreamURL: URL?
     @State private var selectedFilter = "For You"
-    @State private var selectedGenre = "All Genres"
+    @State private var selectedGenres: Set<String> = []
+    @State private var shelfPositions: [String: Int] = [:]
     @State private var selectedType = "All Types"
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
     @AppStorage("shinjiGlowHex") private var glowHex = "4936FF"
@@ -121,10 +122,13 @@ struct LibraryView: View {
                 }
             }
         }
-        if selectedGenre != "All Genres" {
+        if !selectedGenres.isEmpty {
             result = result.filter { item in
                 let description = addonStore.catalogItems.first(where: { $0.id == item.id })?.description ?? ""
-                return (item.title + " " + description).localizedCaseInsensitiveContains(selectedGenre)
+                let searchableText = item.title + " " + description
+                return selectedGenres.contains { genre in
+                    searchableText.localizedCaseInsensitiveContains(genre)
+                }
             }
         }
         return result
@@ -511,51 +515,47 @@ struct LibraryView: View {
     }
 
     private var filterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        let genreOptions = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Fantasy", "Horror", "Romance", "Sci-Fi", "Thriller"]
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 9) {
-                Menu {
-                    ForEach(["All Genres", "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Fantasy", "Horror", "Romance", "Sci-Fi", "Thriller"], id: \.self) { genre in
-                        Button(genre) { selectedGenre = genre }
-                    }
+                Button {
+                    selectedGenres.removeAll()
                 } label: {
-                    Label(selectedGenre == "All Genres" ? "Genre" : selectedGenre, systemImage: "theatermasks")
+                    Text("All Genres")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 13).padding(.vertical, 9)
-                        .background(Color.white.opacity(0.10), in: Capsule())
+                        .foregroundStyle(selectedGenres.isEmpty ? .white : .white.opacity(0.62))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(selectedGenres.isEmpty ? Color(hex: accentHex) : Color.white.opacity(0.07), in: Capsule())
                 }
-                Menu {
-                    ForEach(["All Types", "Movies", "Shows", "Live TV"], id: \.self) { type in
-                        Button(type) { selectedType = type }
-                    }
-                } label: {
-                    Label(selectedType == "All Types" ? "Type" : selectedType, systemImage: "line.3.horizontal.decrease")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 13).padding(.vertical, 9)
-                        .background(Color.white.opacity(0.10), in: Capsule())
-                }
-                ForEach(filters, id: \.self) { filter in
+                .buttonStyle(.plain)
+
+                ForEach(genreOptions, id: \.self) { genre in
+                    let selected = selectedGenres.contains(genre)
                     Button {
-                        withAnimation(.easeInOut(duration: 0.18)) { selectedFilter = filter }
+                        if selected {
+                            selectedGenres.remove(genre)
+                        } else {
+                            selectedGenres.insert(genre)
+                        }
                     } label: {
-                        Text(filter)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(selectedFilter == filter ? .white : .white.opacity(0.58))
-                            .padding(.horizontal, 15)
-                            .padding(.vertical, 9)
-                            .background {
-                                Capsule().fill(selectedFilter == filter
-                                    ? LinearGradient(colors: [Color(hex: accentHex), Color(hex: glowHex)], startPoint: .leading, endPoint: .trailing)
-                                    : LinearGradient(colors: [Color.white.opacity(0.08), Color.white.opacity(0.08)], startPoint: .leading, endPoint: .trailing))
-                            }
-                            .overlay(Capsule().stroke(selectedFilter == filter ? Color(hex: accentHex).opacity(0.8) : Color.white.opacity(0.06), lineWidth: 1))
+                        HStack(spacing: 5) {
+                            if selected { Image(systemName: "checkmark") }
+                            Text(genre)
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(selected ? .white : .white.opacity(0.7))
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 9)
+                        .background(selected ? Color(hex: accentHex) : Color.white.opacity(0.07), in: Capsule())
+                        .overlay(Capsule().stroke(selected ? Color(hex: accentHex).opacity(0.8) : Color.white.opacity(0.08), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 18)
         }
+        .scrollClipDisabled()
     }
 
     private var contentSection: some View {
@@ -697,12 +697,12 @@ struct LibraryView: View {
             if kind == .movies {
                 shelfSection("Recently Added Movies", items: Array(addonStore.catalogItems.filter { $0.type == "movie" }.reversed()))
                 shelfSection("Recently Added Shows", items: Array(addonStore.catalogItems.filter { $0.type == "series" }.reversed()))
-                shelfSection("More Movies", items: Array(addonStore.catalogItems.filter { $0.type == "movie" }.prefix(12)))
+                shelfSection("More Movies", items: Array(addonStore.catalogItems.filter { $0.type == "movie" }))
             } else if kind == .shows {
                 shelfSection("Recently Added Shows", items: Array(addonStore.catalogItems.filter { $0.type == "series" }.reversed()))
-                shelfSection("More Shows", items: Array(addonStore.catalogItems.filter { $0.type == "series" }.prefix(12)))
+                shelfSection("More Shows", items: Array(addonStore.catalogItems.filter { $0.type == "series" }))
             } else {
-                shelfSection("Live Channels", items: addonStore.catalogItems.filter { ["channel", "tv", "live"].contains($0.type.lowercased()) })
+                shelfSection("Live Channels", items: Array(addonStore.catalogItems.filter { ["channel", "tv", "live"].contains($0.type.lowercased()) }))
             }
         }
     }
@@ -716,104 +716,79 @@ struct LibraryView: View {
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.55))
+                    let position = shelfPositions[title] ?? 0
+                    Button {
+                        let step = 3
+                        let next = position + step >= items.count ? 0 : position + step
+                        shelfPositions[title] = next
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .frame(width: 38, height: 38)
+                            .background(Color.white.opacity(0.07), in: Circle())
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 20)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 13) {
-                        ForEach(Array(items.prefix(18).enumerated()), id: \.offset) { _, item in
-                            Button {
-                                selectedItem = item
-                            } label: {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Group {
-                                        if let posterURL = item.posterURL {
-                                            AsyncImage(url: posterURL) { image in
-                                                image.resizable().scaledToFill()
-                                            } placeholder: {
-                                                posterPlaceholder(for: item)
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 13) {
+                            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                                Button {
+                                    selectedItem = item
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                                .fill(Color.white.opacity(0.07))
+                                            if let url = item.posterURL {
+                                                AsyncImage(url: url) { phase in
+                                                    switch phase {
+                                                    case .success(let image):
+                                                        image.resizable().scaledToFill()
+                                                    default:
+                                                        Image(systemName: kind.symbol)
+                                                            .font(.system(size: 28))
+                                                            .foregroundStyle(.white.opacity(0.35))
+                                                    }
+                                                }
+                                            } else {
+                                                Image(systemName: kind.symbol)
+                                                    .font(.system(size: 28))
+                                                    .foregroundStyle(.white.opacity(0.35))
                                             }
-                                        } else {
-                                            posterPlaceholder(for: item)
                                         }
-                                    }
-                                    .frame(width: 132, height: 190)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+                                        .frame(width: 145, height: 205)
+                                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-                                    Text(item.name)
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                        .lineLimit(1)
-                                    Text(item.addonName)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.white.opacity(0.48))
-                                        .lineLimit(1)
+                                        Text(item.name)
+                                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                                            .foregroundStyle(.white)
+                                            .lineLimit(1)
+                                            .frame(width: 145, alignment: .leading)
+                                        Text(item.addonName)
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(.white.opacity(0.42))
+                                            .lineLimit(1)
+                                            .frame(width: 145, alignment: .leading)
+                                    }
                                 }
-                                .frame(width: 132, alignment: .leading)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
+                                .id(index)
                             }
-                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .onChange(of: shelfPositions[title] ?? 0) { _, newValue in
+                        withAnimation(.easeInOut(duration: 0.28)) {
+                            proxy.scrollTo(newValue, anchor: .leading)
                         }
                     }
-                    .padding(.horizontal, 18)
                 }
             }
         }
-    }
-
-    private func posterPlaceholder(for item: AddonCatalogItem) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(hex: glowHex).opacity(0.8), Color(hex: accentHex).opacity(0.25), Color.black],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            Image(systemName: item.type == "series" ? "tv" : (item.type == "movie" ? "film" : "dot.radiowaves.left.and.right"))
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(.white.opacity(0.75))
-        }
-    }
-
-    private var streamURLSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "play.rectangle.on.rectangle")
-                    .foregroundStyle(Color(hex: accentHex))
-                Text("Play from a URL")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-            }
-            Text("Open a direct stream from a source you’re authorized to access.")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
-            TextField("https://example.org/video.m3u8", text: $streamURL)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(13)
-                .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 13))
-                .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(hex: accentHex).opacity(0.25), lineWidth: 1))
-            Button {
-                showPlayer = true
-            } label: {
-                Label("Open Player", systemImage: "play.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(LinearGradient(colors: [Color(hex: accentHex), Color(hex: glowHex)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 14))
-            }
-            .buttonStyle(.plain)
-            .disabled(!isValidStreamURL)
-            .opacity(isValidStreamURL ? 1 : 0.5)
-        }
-        .padding(17)
-        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.white.opacity(0.08), lineWidth: 1))
-        .padding(.horizontal, 16)
     }
 
     private var footerNote: some View {
