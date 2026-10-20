@@ -1,9 +1,5 @@
 from pathlib import Path
 
-
-# CI source repair for known generated/escaped Swift fragments. Keep this
-# idempotent so repeated builds always converge to compilable source.
-
 unified = Path("Shinji/Views/UnifiedLibraryView.swift")
 text = unified.read_text(encoding="utf-8")
 
@@ -11,17 +7,11 @@ text = text.replace(
     '        let text = "\\(item.name) \\(item.description ?? \\\"\\\")"',
     '        let text = item.name + " " + (item.description ?? "")',
 )
-
-# Keep the top filter row focused on content filters. Genre selection lives
-# exclusively in the dedicated multi-select genre row below it.
 text = text.replace(
     '    private let filters = ["For You", "Popular", "Recently Added", "Action", "Drama"]',
     '    private let filters = ["For You", "Popular", "Recently Added"]',
 )
 
-# Match against normalized catalog genre metadata. Also fall back to the
-# title/description so catalogs that omit structured genre fields still get
-# useful filtering instead of silently returning a single item.
 old_matches = '''    private func matches(_ item: AddonCatalogItem, genre: String) -> Bool {
         let text = "\\(item.name) \\(item.description ?? "")"
         return text.localizedCaseInsensitiveContains(genre)
@@ -43,64 +33,64 @@ new_matches = '''    private func matches(_ item: AddonCatalogItem, genre: Strin
 '''
 text = text.replace(old_matches, new_matches, 1)
 
-# Add persistent My List bookmarks to catalog cards and title details.
-if '@StateObject private var watchlistStore = WatchlistStore.shared' not in text:
+# Make the Featured picks arrow actually scroll the shelf to its last visible card.
+if '@State private var featuredScrollID' not in text:
     text = text.replace(
-        '    @EnvironmentObject private var addonStore: AddonStore\n',
-        '    @EnvironmentObject private var addonStore: AddonStore\n    @StateObject private var watchlistStore = WatchlistStore.shared\n',
+        '    @State private var showAddStream = false\n',
+        '    @State private var showAddStream = false\n    @State private var featuredScrollID: String?\n',
         1,
     )
-
-poster_anchor = '''                    LinearGradient(colors: [.clear, .black.opacity(0.68)], startPoint: .center, endPoint: .bottom)
-                    Text(item.type.lowercased() == "movie" ? "MOVIE" : "TV")
+old_featured_arrow = '''                Spacer()
+                Image(systemName: "arrow.right")
+                    .foregroundStyle(Color(hex: accentHex))
 '''
-poster_replacement = '''                    LinearGradient(colors: [.clear, .black.opacity(0.68)], startPoint: .center, endPoint: .bottom)
-                    Button {
-                        watchlistStore.toggle(item)
-                    } label: {
-                        Image(systemName: watchlistStore.contains(catalogID: item.id, addonName: item.addonName) ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 34, height: 34)
-                            .background(.black.opacity(0.65), in: Circle())
+new_featured_arrow = '''                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        featuredScrollID = featuredItems.last?.id
                     }
-                    .buttonStyle(.plain)
-                    .padding(9)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    Text(item.type.lowercased() == "movie" ? "MOVIE" : "TV")
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(Color(hex: accentHex))
+                        .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(featuredItems.count < 2)
+                .opacity(featuredItems.count < 2 ? 0.35 : 1)
 '''
-text = text.replace(poster_anchor, poster_replacement, 1)
-
-stream_title_anchor = '''                    Text(item.name)
-                        .font(.system(size: 25, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    if let description = item.description, !description.isEmpty {
-'''
-stream_title_replacement = '''                    HStack(alignment: .top, spacing: 12) {
-                        Text(item.name)
-                            .font(.system(size: 25, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Button {
-                            watchlistStore.toggle(item)
-                        } label: {
-                            Image(systemName: watchlistStore.contains(catalogID: item.id, addonName: item.addonName) ? "bookmark.fill" : "bookmark")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 42, height: 42)
-                                .background(Color(hex: accentHex).opacity(0.8), in: Circle())
+text = text.replace(old_featured_arrow, new_featured_arrow, 1)
+old_featured_scroll = '''                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 13) {
+                        ForEach(featuredItems) { item in
+                            posterCard(item, height: 190)
                         }
                     }
-                    Text(watchlistStore.contains(catalogID: item.id, addonName: item.addonName) ? "Saved to My List — watch it later." : "Save this title to My List so you can watch it later.")
-                        .font(.caption)
-                        .foregroundStyle(Color(hex: accentHex))
-                    if let description = item.description, !description.isEmpty {
+                    .padding(.horizontal, 20)
+                }
 '''
-text = text.replace(stream_title_anchor, stream_title_replacement, 1)
-unified.write_text(text, encoding="utf-8")
+new_featured_scroll = '''                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 13) {
+                            ForEach(featuredItems) { item in
+                                posterCard(item, height: 190)
+                                    .id(item.id)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .onChange(of: featuredScrollID) { _, target in
+                        guard let target else { return }
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            proxy.scrollTo(target, anchor: .trailing)
+                        }
+                    }
+                }
+'''
+text = text.replace(old_featured_scroll, new_featured_scroll, 1)
 
-# Carry genre metadata from Stremio catalog responses into the model. Sources
-# are inconsistent: some use genres:[String], genre:[String], or genre:String.
+# Carry genre metadata from Stremio catalog responses into the model.
 addon = Path("Shinji/Services/AddonStore.swift")
 addon_text = addon.read_text(encoding="utf-8")
 addon_text = addon_text.replace(
@@ -134,7 +124,7 @@ addon_text = addon_text.replace(
 )
 addon.write_text(addon_text, encoding="utf-8")
 
-# Keep the MPV command buffer ABI fix in every CI build.
+# Keep MPV command fixes in every CI build.
 mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
 mpv_text = mpv.read_text(encoding="utf-8")
 old_execute = '''    private func execute(_ arguments: [String], on handle: OpaquePointer) {
@@ -161,10 +151,8 @@ new_execute = '''    private func execute(_ arguments: [String], on handle: Opaq
                 free(pointer)
             }
         }
-
         var cargs: [UnsafePointer<CChar>?] = owned.map { UnsafePointer($0) }
         cargs.append(nil)
-
         let result = cargs.withUnsafeBufferPointer { buffer in
             mpv_command(handle, buffer.baseAddress)
         }
@@ -175,13 +163,11 @@ new_execute = '''    private func execute(_ arguments: [String], on handle: Opaq
 '''
 if old_execute in mpv_text:
     mpv_text = mpv_text.replace(old_execute, new_execute, 1)
-
-# Use MPV's canonical track-selection properties.
 mpv_text = mpv_text.replace('["cycle", "audio"]', '["cycle", "aid"]')
 mpv_text = mpv_text.replace('["cycle", "sub"]', '["cycle", "sid"]')
 mpv.write_text(mpv_text, encoding="utf-8")
 
-# Automatically populate Keep Watching from every MPV playback session.
+# Automatically populate Keep Watching from playback sessions.
 player = Path("Shinji/Views/PlayerView.swift")
 p = player.read_text(encoding="utf-8")
 p = p.replace(
@@ -247,8 +233,7 @@ p = p.replace(
 )
 player.write_text(p, encoding="utf-8")
 
-# Add a persistent My List section to the Library home screen. Saved catalog
-# titles can be opened in their matching movie/TV library and removed here.
+# Persistent My List section.
 home = Path("Shinji/Views/HomeLibraryView.swift")
 h = home.read_text(encoding="utf-8")
 h = h.replace(
@@ -282,7 +267,6 @@ section = '''    @ViewBuilder
                         .foregroundStyle(Color(hex: accentHex))
                 }
                 .padding(.horizontal, 20)
-
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 13) {
                         ForEach(watchlistStore.items) { item in
@@ -291,8 +275,7 @@ section = '''    @ViewBuilder
                             } label: {
                                 VStack(alignment: .leading, spacing: 8) {
                                     ZStack(alignment: .topTrailing) {
-                                        RoundedRectangle(cornerRadius: 18)
-                                            .fill(Color.white.opacity(0.08))
+                                        RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.08))
                                         if let raw = item.posterURL, let url = URL(string: raw) {
                                             AsyncImage(url: url) { phase in
                                                 if case .success(let image) = phase { image.resizable().scaledToFill() }
@@ -301,31 +284,16 @@ section = '''    @ViewBuilder
                                         } else {
                                             Image(systemName: item.type.lowercased() == "movie" ? "film" : "tv").font(.system(size: 34)).foregroundStyle(.white.opacity(0.55))
                                         }
-                                        Button {
-                                            watchlistStore.remove(item)
-                                        } label: {
-                                            Image(systemName: "bookmark.fill")
-                                                .font(.system(size: 12, weight: .bold))
-                                                .foregroundStyle(.white)
-                                                .frame(width: 32, height: 32)
-                                                .background(.black.opacity(0.7), in: Circle())
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(8)
+                                        Button { watchlistStore.remove(item) } label: {
+                                            Image(systemName: "bookmark.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(.white).frame(width: 32, height: 32).background(.black.opacity(0.7), in: Circle())
+                                        }.buttonStyle(.plain).padding(8)
                                     }
-                                    .frame(width: 145, height: 190)
-                                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                                    Text(item.title)
-                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.white)
-                                        .lineLimit(1)
-                                        .frame(width: 145, alignment: .leading)
+                                    .frame(width: 145, height: 190).clipShape(RoundedRectangle(cornerRadius: 18))
+                                    Text(item.title).font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(1).frame(width: 145, alignment: .leading)
                                 }
-                            }
-                            .buttonStyle(.plain)
+                            }.buttonStyle(.plain)
                         }
-                    }
-                    .padding(.horizontal, 20)
+                    }.padding(.horizontal, 20)
                 }
             }
         }
