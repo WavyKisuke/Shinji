@@ -14,7 +14,7 @@ struct CatalogGridPage: View {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(items) { item in
                     NavigationLink {
-                        UnifiedLibraryView(kind: item.type.lowercased() == "movie" ? .movies : .tvShows, initialItem: item)
+                        UnifiedLibraryView(kind: item.type.lowercased() == "movie" ? .movies : .tvShows)
                     } label: {
                         VStack(alignment: .leading, spacing: 8) {
                             ZStack {
@@ -29,14 +29,8 @@ struct CatalogGridPage: View {
                             .frame(maxWidth: .infinity)
                             .aspectRatio(0.69, contentMode: .fit)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-                            Text(item.name)
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .lineLimit(2)
-                            Text(item.year ?? "")
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.5))
+                            Text(item.name).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(2)
+                            Text(item.year ?? "").font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.5))
                         }
                     }
                     .buttonStyle(.plain)
