@@ -40,3 +40,5 @@ jobs:
           name: Shinji-player-fix-unsigned-ipa
           path: Shinji-unsigned.ipa
           retention-days: 14
+      - name: Build complete
+        run: echo "Shinji IPA build completed successfully"
