@@ -12,6 +12,13 @@ text = text.replace(
     '        let text = item.name + " " + (item.description ?? "")',
 )
 
+# Keep the top filter row focused on content filters. Genre selection lives
+# exclusively in the dedicated multi-select genre row below it.
+text = text.replace(
+    '    private let filters = ["For You", "Popular", "Recently Added", "Action", "Drama"]',
+    '    private let filters = ["For You", "Popular", "Recently Added"]',
+)
+
 # The "For You" branch used to render the same More shelf a second time.
 duplicate_more = '''                    if selectedFilter == "For You" {
                         shelfSection(kind == .movies ? "More Movies" : "More TV Shows", items: moreItems)
