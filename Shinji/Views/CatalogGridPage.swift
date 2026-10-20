@@ -8,6 +8,7 @@ struct CatalogGridPage: View {
     let onSelect: (AddonCatalogItem) -> Void
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+    @State private var selectedItem: AddonCatalogItem?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -15,6 +16,7 @@ struct CatalogGridPage: View {
                 ForEach(items) { item in
                     Button {
                         onSelect(item)
+                        selectedItem = item
                     } label: {
                         VStack(alignment: .leading, spacing: 8) {
                             ZStack(alignment: .bottomLeading) {
@@ -66,6 +68,9 @@ struct CatalogGridPage: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.large)
         .preferredColorScheme(.dark)
+        .sheet(item: $selectedItem) { item in
+            CatalogItemDetailView(item: item)
+        }
     }
 
     private func placeholder(for item: AddonCatalogItem) -> some View {
