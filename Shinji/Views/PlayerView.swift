@@ -19,14 +19,15 @@ struct PlayerView: View {
     @State private var command: String?
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var controlsLocked = false
+    @State private var showSettings = false
 
     var body: some View {
         GeometryReader { _ in
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                // Keep the native MPV view completely out of SwiftUI hit testing.
-                // A separate transparent SwiftUI layer below the controls handles taps.
+                // One native MPV surface for the entire player lifetime.
+                // SwiftUI owns only the controls; MPV owns the video surface.
                 playerSurface()
                     .zIndex(0)
                     .allowsHitTesting(false)
@@ -35,31 +36,56 @@ struct PlayerView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         guard playbackError == nil else { return }
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            showControls.toggle()
+                        if controlsLocked {
+                            controlsLocked = false
+                            showControls = true
+                            scheduleHide()
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                showControls.toggle()
+                            }
+                            if showControls { scheduleHide() } else { hideControlsTask?.cancel() }
                         }
-                        if showControls { scheduleHide() } else { hideControlsTask?.cancel() }
                     }
                     .zIndex(1)
                     .allowsHitTesting(playbackError == nil)
 
-                if showControls && !controlsLocked {
+                if showControls {
                     controlsOverlay()
                         .zIndex(10)
                         .allowsHitTesting(true)
+                }
+
+                if controlsLocked {
+                    Button {
+                        controlsLocked = false
+                        showControls = true
+                        scheduleHide()
+                    } label: {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 40, height: 40)
+                            .background(.black.opacity(0.5), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(.top, 16)
+                    .padding(.trailing, 18)
+                    .zIndex(20)
                 }
 
                 if isPreparingPlayback && playbackError == nil {
                     ProgressView()
                         .tint(.white)
                         .scaleEffect(1.15)
-                        .zIndex(20)
+                        .zIndex(30)
                         .allowsHitTesting(false)
                 }
 
                 if let playbackError {
                     errorOverlay(playbackError)
-                        .zIndex(30)
+                        .zIndex(40)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -71,6 +97,7 @@ struct PlayerView: View {
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            OrientationLockCoordinator.playerDidAppear()
             hideParentTabBar(true)
             startInternalPlayback()
         }
@@ -87,6 +114,11 @@ struct PlayerView: View {
             hideParentTabBar(true)
             showControls = true
             scheduleHide()
+        }
+        .sheet(isPresented: $showSettings) {
+            PlayerSettingsSheet(sendCommand: sendCommand)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
         .onDisappear {
             hideControlsTask?.cancel()
@@ -181,14 +213,17 @@ struct PlayerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
 
-            Button { controlsLocked.toggle() } label: {
-                Image(systemName: controlsLocked ? "lock.fill" : "ellipsis")
+            Button {
+                controlsLocked = true
+                hideControlsTask?.cancel()
+            } label: {
+                Image(systemName: "lock.fill")
                     .font(.system(size: 17, weight: .semibold))
                     .frame(width: 42, height: 42)
                     .background(.black.opacity(0.4), in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(controlsLocked ? "Unlock controls" : "More options")
+            .accessibilityLabel("Lock controls")
         }
         .padding(.horizontal, 18)
         .padding(.top, 14)
@@ -241,7 +276,7 @@ struct PlayerView: View {
                     sendCommand("set mute \(isMuted ? "yes" : "no")")
                     scheduleHide()
                 }
-                bottomButton("gearshape", "Settings") { }
+                bottomButton("gearshape", "Settings") { showSettings = true }
                 Spacer()
                 Text("Shinji").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.5))
             }
@@ -298,6 +333,7 @@ struct PlayerView: View {
         command = nil
         commandID += 1
         showControls = true
+        controlsLocked = false
         scheduleHide()
         PlaybackAudio.configureToMixWithOtherAudio()
     }
@@ -314,6 +350,7 @@ struct PlayerView: View {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
             await MainActor.run {
+                guard !controlsLocked else { return }
                 withAnimation(.easeInOut(duration: 0.18)) { showControls = false }
             }
         }
@@ -337,6 +374,31 @@ struct PlayerView: View {
         let secs = total % 60
         if hours > 0 { return String(format: "%d:%02d:%02d", hours, minutes, secs) }
         return String(format: "%d:%02d", minutes, secs)
+    }
+}
+
+private struct PlayerSettingsSheet: View {
+    let sendCommand: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Video") {
+                    Button("Fit") { sendCommand("set video-unscaled no"); dismiss() }
+                    Button("Fill") { sendCommand("set video-unscaled yes"); dismiss() }
+                    Button("Reset Video Zoom") { sendCommand("set video-zoom 0"); dismiss() }
+                }
+                Section("Playback") {
+                    Button("Normal Speed") { sendCommand("set speed 1"); dismiss() }
+                    Button("1.25×") { sendCommand("set speed 1.25"); dismiss() }
+                    Button("1.5×") { sendCommand("set speed 1.5"); dismiss() }
+                    Button("2×") { sendCommand("set speed 2"); dismiss() }
+                }
+            }
+            .navigationTitle("Player Settings")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
     }
 }
 
