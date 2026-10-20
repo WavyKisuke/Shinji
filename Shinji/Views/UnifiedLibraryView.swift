@@ -78,6 +78,22 @@ struct UnifiedLibraryView: View {
         filteredItems.filter { $0.type.lowercased() == "series" }
     }
 
+    private var featuredItems: [AddonCatalogItem] {
+        Array(filteredItems.prefix(8))
+    }
+
+    private var remainingItems: [AddonCatalogItem] {
+        Array(filteredItems.dropFirst(featuredItems.count))
+    }
+
+    private var recentItems: [AddonCatalogItem] {
+        Array(remainingItems.prefix(12))
+    }
+
+    private var moreItems: [AddonCatalogItem] {
+        Array(remainingItems.dropFirst(recentItems.count).prefix(12))
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
@@ -88,14 +104,14 @@ struct UnifiedLibraryView: View {
                     genreBar
                     featuredSection
                     if kind == .movies {
-                        shelfSection("Recently Added Movies", items: movieItems)
-                        shelfSection("Popular Movies", items: Array(movieItems.prefix(24)))
+                        shelfSection("Recently Added Movies", items: recentItems)
+                        shelfSection("More Movies", items: moreItems)
                     } else {
-                        shelfSection("Recently Added TV Shows", items: showItems)
-                        shelfSection("Popular TV Shows", items: Array(showItems.prefix(24)))
+                        shelfSection("Recently Added TV Shows", items: recentItems)
+                        shelfSection("More TV Shows", items: moreItems)
                     }
                     if selectedFilter == "For You" {
-                        shelfSection(kind == .movies ? "More Movies" : "More TV Shows", items: filteredItems)
+                        shelfSection(kind == .movies ? "More Movies" : "More TV Shows", items: moreItems)
                     }
                     footer
                 }
@@ -108,8 +124,8 @@ struct UnifiedLibraryView: View {
             .sheet(item: $selectedItem) { item in streamSheet(item) }
             .navigationDestination(isPresented: $showPlayer) {
                 if let url = selectedStreamURL ?? URL(string: streamURL),
-                   ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
-                   url.host != nil {
+                    ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                    url.host != nil {
                     PlayerView(
                         url: url,
                         title: selectedStreamURL == nil ? "Stream" : "Selected title",
@@ -274,7 +290,7 @@ struct UnifiedLibraryView: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 13) {
-                        ForEach(Array(filteredItems.prefix(12))) { item in
+                        ForEach(featuredItems) { item in
                             posterCard(item, height: 190)
                         }
                     }

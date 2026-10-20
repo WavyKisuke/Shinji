@@ -22,9 +22,6 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Repair Swift source syntax
-        run: python3 Scripts/fix_build_source.py
-
       - name: Generate Xcode project
         run: xcodegen generate
 
