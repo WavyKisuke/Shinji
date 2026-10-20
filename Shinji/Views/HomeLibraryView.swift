@@ -51,11 +51,7 @@ struct HomeLibraryView: View {
                 Text("Home").font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white)
             }
             Spacer()
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(Color.white.opacity(0.08), in: Circle())
+            Image(systemName: "magnifyingglass").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white).frame(width: 44, height: 44).background(Color.white.opacity(0.08), in: Circle())
         }
         .padding(.horizontal, 20)
     }
@@ -66,8 +62,7 @@ struct HomeLibraryView: View {
             VStack(alignment: .leading, spacing: 13) {
                 sectionHeader("Keep Watching", subtitle: "Continue where you left off", items: continueStore.items.count)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 13) { ForEach(continueStore.items) { entry in continueCard(entry) } }
-                        .padding(.horizontal, 20)
+                    HStack(spacing: 13) { ForEach(continueStore.items) { entry in continueCard(entry) } }.padding(.horizontal, 20)
                 }
             }
         }
@@ -83,11 +78,7 @@ struct HomeLibraryView: View {
                     NavigationLink {
                         CatalogGridPage(title: title, items: items, accentHex: accentHex, glowHex: glowHex, onSelect: { _ in })
                     } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.78))
-                            .frame(width: 42, height: 42)
-                            .background(Color.white.opacity(0.07), in: Circle())
+                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.78)).frame(width: 42, height: 42).background(Color.white.opacity(0.07), in: Circle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -97,7 +88,7 @@ struct HomeLibraryView: View {
                     HStack(alignment: .top, spacing: 13) {
                         ForEach(items) { item in
                             NavigationLink {
-                                UnifiedLibraryView(kind: item.type.lowercased() == "movie" ? .movies : .tvShows, initialItem: item)
+                                UnifiedLibraryView(kind: item.type.lowercased() == "movie" ? .movies : .tvShows)
                             } label: { catalogCard(item) }
                             .buttonStyle(.plain)
                         }
