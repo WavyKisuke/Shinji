@@ -90,18 +90,22 @@ struct PlayerView: View {
 
     private var topBar: some View {
         HStack(spacing: 14) {
-            Button { dismiss() } label: { Image(systemName: "chevron.down").font(.system(size: 18, weight: .semibold)).frame(width: 42, height: 42).background(.black.opacity(0.4), in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Close player")
-            if !isFullscreen { VStack(alignment: .leading, spacing: 2) { Text(title).font(.headline.weight(.semibold)).lineLimit(1); Text(playbackDiagnostics).font(.caption).foregroundStyle(.white.opacity(0.65)).lineLimit(1) } }
+            Button { dismiss() } label: { Image(systemName: "chevron.down").font(.system(size: 18, weight: .semibold)).frame(width: 42, height: 42).background(.black.opacity(0.4), in: Circle()) }
+            .buttonStyle(.plain)
+            if !isFullscreen { VStack(alignment: .leading, spacing: 2) { Text(title).font(.headline.weight(.semibold)).lineLimit(1); Text(playbackDiagnostics).font(.caption).foregroundStyle(.white.opacity(0.7)) } }
             Spacer()
-            Button { isFullscreen.toggle() } label: { Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 17, weight: .semibold)).frame(width: 42, height: 42).background(.black.opacity(0.4), in: Circle()) }.buttonStyle(.plain).accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
-            Button { controlsLocked = true; showControls = true; hideControlsTask?.cancel() } label: { Image(systemName: "lock.fill").font(.system(size: 17, weight: .semibold)).frame(width: 42, height: 42).background(.black.opacity(0.4), in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Lock controls")
+            Button { isFullscreen.toggle() } label: { Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.system(size: 17, weight: .semibold)).frame(width: 42, height: 42).background(.black.opacity(0.4), in: Circle()) }
+            .buttonStyle(.plain)
+            Button { controlsLocked = true; showControls = true; hideControlsTask?.cancel() } label: { Image(systemName: "lock.fill").font(.system(size: 17, weight: .semibold)).frame(width: 42, height: 42).background(.black.opacity(0.4), in: Circle()) }
+            .buttonStyle(.plain)
         }.padding(.horizontal, 18).padding(.top, 14)
     }
 
     private var centerControls: some View {
         HStack(spacing: 46) {
             seekButton(seconds: -10)
-            Button { sendCommand("cycle pause"); scheduleHide() } label: { Image(systemName: isPlaying ? "pause.fill" : "play.fill").font(.system(size: 28, weight: .bold)).frame(width: 64, height: 64).background(.black.opacity(0.28), in: Circle()) }.buttonStyle(.plain).accessibilityLabel(isPlaying ? "Pause" : "Play")
+            Button { sendCommand("cycle pause"); scheduleHide() } label: { Image(systemName: isPlaying ? "pause.fill" : "play.fill").font(.system(size: 28, weight: .bold)).frame(width: 64, height: 64).background(.black.opacity(0.35), in: Circle()) }
+            .buttonStyle(.plain)
             seekButton(seconds: 10)
         }.shadow(radius: 8)
     }
@@ -110,13 +114,14 @@ struct PlayerView: View {
         VStack(spacing: 9) {
             HStack(spacing: 10) {
                 Text(formatTime(position)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
-                Slider(value: Binding(get: { duration > 0 ? min(position, duration) : 0 }, set: { newValue in guard duration > 0 else { return }; position = newValue; sendCommand("set time-pos \(newValue)") }), in: 0...max(duration, 1)).tint(.white).contentShape(Rectangle())
+                Slider(value: Binding(get: { duration > 0 ? min(position, duration) : 0 }, set: { newValue in guard duration > 0 else { return }; position = newValue; sendCommand("set time-pos \(newValue)") }), in: 0...max(duration, 1))
+                    .tint(.white)
                 Text(formatTime(duration)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
             }
             HStack(spacing: 22) {
                 bottomButton("waveform", "Audio") { sendCommand("cycle audio"); scheduleHide() }
                 bottomButton("captions.bubble", "Subtitles") { sendCommand("cycle sub"); scheduleHide() }
-                bottomButton(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", isMuted ? "Unmute" : "Mute") { let nextMuted = !isMuted; isMuted = nextMuted; sendCommand("set mute \(nextMuted ? "yes" : "no")"); scheduleHide() }
+                bottomButton(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", isMuted ? "Unmute" : "Mute") { let nextMuted = !isMuted; isMuted = nextMuted; sendCommand("set mute \(nextMuted ? \"yes\" : \"no\")"); scheduleHide() }
                 bottomButton("gearshape", "Settings") { showSettings = true }
                 Spacer(); Text("Shinji").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.5))
             }
@@ -130,26 +135,77 @@ struct PlayerView: View {
         }.buttonStyle(.plain)
     }
 
-    private func bottomButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View { Button(action: action) { Image(systemName: icon).font(.system(size: 17, weight: .medium)).frame(width: 42, height: 42).contentShape(Rectangle()) }.buttonStyle(.plain).accessibilityLabel(label) }
+    private func bottomButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 17, weight: .medium)).foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+    }
 
     private func errorOverlay(_ message: String) -> some View {
-        VStack(spacing: 14) { Image(systemName: "exclamationmark.triangle.fill").font(.title); Text("Couldn't play this stream").font(.headline); Text(message).font(.footnote).foregroundStyle(.white.opacity(0.72)).multilineTextAlignment(.center); Button("Try Again") { startInternalPlayback() }.buttonStyle(.borderedProminent) }
-            .foregroundStyle(.white).padding(28).frame(maxWidth: 430).background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 20)).padding(24)
+        VStack(spacing: 14) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.title)
+            Text("Couldn't play this stream").font(.headline)
+            Text(message).font(.footnote).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center)
+            Button("Retry") { startInternalPlayback() }
+                .buttonStyle(.borderedProminent)
+        }
+        .foregroundStyle(.white)
+        .padding(28)
+        .frame(maxWidth: 430)
+        .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 20))
+        .padding(24)
     }
 
     private func startInternalPlayback() {
-        playbackError = nil; isPreparingPlayback = true; playbackDiagnostics = "Loading…"; position = 0; duration = 0; command = nil; commandID += 1; showControls = true; controlsLocked = false; scheduleHide(); PlaybackAudio.configureToMixWithOtherAudio()
+        playbackError = nil
+        isPreparingPlayback = true
+        playbackDiagnostics = "Loading…"
+        position = 0
+        duration = 0
+        command = nil
+        commandID += 1
+        showControls = true
+        controlsLocked = false
+        NotificationCenter.default.post(name: .shinjiPlayerStartPlayback, object: nil)
     }
-    private func sendCommand(_ value: String) { command = value; commandID += 1 }
+
+    private func sendCommand(_ value: String) {
+        command = value
+        commandID += 1
+    }
+
     private func scheduleHide() {
-        hideControlsTask?.cancel(); showControls = true
-        hideControlsTask = Task { try? await Task.sleep(for: .seconds(4)); guard !Task.isCancelled else { return }; await MainActor.run { guard !controlsLocked else { return }; withAnimation(.easeInOut(duration: 0.18)) { showControls = false } } }
+        hideControlsTask?.cancel()
+        showControls = true
+        hideControlsTask = Task {
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard !controlsLocked else { return }
+                withAnimation(.easeInOut(duration: 0.18)) { showControls = false }
+            }
+        }
     }
+
     private func hideParentTabBar(_ hidden: Bool) {
-        DispatchQueue.main.async { guard let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first, let tabBarController = root.firstTabBarController() else { return }; tabBarController.tabBar.isHidden = hidden }
+        DispatchQueue.main.async {
+            guard let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first,
+                  let tabBarController = root.firstTabBarController() else { return }
+            tabBarController.tabBar.isHidden = hidden
+        }
     }
+
     private func formatTime(_ seconds: Double) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }; let total = Int(seconds.rounded()); let hours = total / 3600; let minutes = (total % 3600) / 60; let secs = total % 60; if hours > 0 { return String(format: "%d:%02d:%02d", hours, minutes, secs) }; return String(format: "%d:%02d", minutes, secs)
+        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
+        let total = Int(seconds.rounded())
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%d:%02d", minutes, secs)
     }
 }
 
@@ -157,20 +213,58 @@ private struct PlayerSettingsSheet: View {
     let sendCommand: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     private let playbackSpeeds: [Double] = [1.0, 1.25, 1.5, 2.0, 3.0, 4.0]
+
     var body: some View {
         NavigationStack {
             List {
-                Section("Video") { Button("Fit") { sendCommand("set video-unscaled no"); dismiss() }; Button("Original Size") { sendCommand("set video-unscaled yes"); dismiss() }; Button("Reset Video Zoom") { sendCommand("set video-zoom 0"); dismiss() } }
+                Section("Video") {
+                    Button("Fit") { sendCommand("set video-unscaled no"); dismiss() }
+                    Button("Original Size") { sendCommand("set video-unscaled yes"); dismiss() }
+                    Button("Reset View") { sendCommand("set video-aspect-override no"); dismiss() }
+                }
+
                 Section("Playback Speed") {
                     ForEach(playbackSpeeds, id: \.self) { speed in
-                        Button { sendCommand("set speed \(speed)"); dismiss() } label: { HStack { Text(speed == 1.0 ? "1×" : "\(speed.formatted(.number.precision(.fractionLength(0...2))))×"); if speed == 1.0 { Spacer(); Text("Normal").foregroundStyle(.secondary) } } }
+                        Button {
+                            sendCommand("set speed \(speed)")
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(speed == 1.0 ? "1×" : "\(speed.formatted(.number.precision(.fractionLength(0...2))))×")
+                                Spacer()
+                                if speed == 1.0 {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
                     }
                 }
-            }.navigationTitle("Player Settings").toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            }
+            .navigationTitle("Player Settings")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
 
 private extension UIViewController {
-    func firstTabBarController() -> UITabBarController? { if let tab = self as? UITabBarController { return tab }; for child in children { if let tab = child.firstTabBarController() { return tab } }; if let presented = presentedViewController, let tab = presented.firstTabBarController() { return tab }; return nil }
+    func firstTabBarController() -> UITabBarController? {
+        if let tab = self as? UITabBarController { return tab }
+        for child in children {
+            if let tab = child.firstTabBarController() { return tab }
+        }
+        return nil
+    }
+}
+
+private extension Notification.Name {
+    static let shinjiPlayerStartPlayback = Notification.Name("ShinjiPlayerStartPlayback")
+}
+
+private extension OrientationLockCoordinator {
+    static func playerDidAppear() { }
+    static func setPlayerFullscreen(_ fullscreen: Bool) { }
 }
