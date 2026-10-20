@@ -555,7 +555,6 @@ struct LibraryView: View {
             }
             .padding(.horizontal, 18)
         }
-        .scrollClipDisabled()
     }
 
     private var contentSection: some View {
@@ -781,7 +780,7 @@ struct LibraryView: View {
                         }
                         .padding(.horizontal, 20)
                     }
-                    .onChange(of: shelfPositions[title] ?? 0) { _, newValue in
+                    .onChange(of: shelfPositions[title] ?? 0) { newValue in
                         withAnimation(.easeInOut(duration: 0.28)) {
                             proxy.scrollTo(newValue, anchor: .leading)
                         }
