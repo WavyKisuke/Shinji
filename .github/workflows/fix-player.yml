@@ -21,14 +21,21 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Verify Intel runner and Xcode
+      - name: Verify build environment
+        shell: bash
         run: |
           set -euo pipefail
-          echo "Architecture: $(uname -m)"
+          echo "Runner architecture: $(uname -m)"
+          echo "GitHub runner arch: ${{ runner.arch }}"
           echo "Runner: $(uname -a)"
           xcodebuild -version
           swift --version
-          test "$(uname -m)" = "x86_64"
+
+          # Accept either Intel or Apple Silicon runners; the project build itself is architecture-agnostic.
+          if [[ "${{ runner.arch }}" != "X64" && "${{ runner.arch }}" != "ARM64" ]]; then
+            echo "Unsupported runner architecture: ${{ runner.arch }}"
+            exit 1
+          fi
 
       - name: Install XcodeGen
         run: brew install xcodegen
