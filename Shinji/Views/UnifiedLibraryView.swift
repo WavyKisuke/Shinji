@@ -112,7 +112,7 @@ struct UnifiedLibraryView: View {
 private struct SavedLibraryItemView: View {
     let item: WatchlistItem
     @StateObject private var watchlistStore = WatchlistStore.shared
-    @StateObject private var addonStore = AddonStore.shared
+    @EnvironmentObject private var addonStore: AddonStore
     @State private var selectedStream: AddonStreamOption?
     @State private var showPlayer = false
     @State private var loading = false
@@ -143,7 +143,7 @@ private struct SavedLibraryItemView: View {
 
     private func play() async {
         loading = true
-        let catalog = AddonCatalogItem(id: item.catalogID, type: item.type, name: item.title, posterURL: item.posterURL.flatMap(URL.init(string:)), year: nil, description: item.description, genres: [], addonName: item.addonName)
+        let catalog = AddonCatalogItem(id: item.catalogID, type: item.type, name: item.title, posterURL: item.posterURL.flatMap(URL.init(string:)), description: item.description, year: nil, addonName: item.addonName)
         await addonStore.loadStreams(for: catalog)
         selectedStream = addonStore.streamOptions.first
         showPlayer = selectedStream != nil
