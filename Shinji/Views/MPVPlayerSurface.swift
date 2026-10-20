@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import Metal
 import Libmpv
 
 struct MPVPlayerSurface: UIViewRepresentable {
@@ -46,7 +45,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
         private var lastMuted: Bool?
         private var isShuttingDown = false
         private let stateLock = NSLock()
-        private let commandQueue = DispatchQueue(label: "shinji.mpv.commands", qos: .userInitiated)
+        private let mpvQueue = DispatchQueue(label: "shinji.mpv", qos: .userInitiated)
 
         var onStatus: ((String) -> Void)?
         var onError: ((String) -> Void)?
@@ -60,8 +59,9 @@ struct MPVPlayerSurface: UIViewRepresentable {
             stateLock.unlock()
 
             surface = view
+
             guard let handle = mpv_create() else {
-                DispatchQueue.main.async { self.onError?("MPV could not create a playback instance.") }
+                publishError("MPV could not create a playback instance.")
                 return
             }
 
@@ -69,47 +69,89 @@ struct MPVPlayerSurface: UIViewRepresentable {
             mpv = handle
             stateLock.unlock()
 
-            _ = mpv_request_log_messages(handle, "warn")
-            var layerPointer = Int64(Int(bitPattern: Unmanaged.passUnretained(view.metalLayer).toOpaque()))
-            _ = mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &layerPointer)
-            let options: [(String, String)] = [
-                ("vo", "gpu-next"), ("gpu-api", "vulkan"), ("gpu-context", "moltenvk"),
-                ("hwdec", "videotoolbox"), ("ao", "audiounit"),
-                ("audio-channels", "auto"), ("audio-fallback-to-null", "yes"),
-                ("vulkan-swap-mode", "fifo"), ("vulkan-queue-count", "1"),
-                ("vulkan-async-compute", "no"), ("vulkan-async-transfer", "no"),
-                ("vulkan-disable-interop", "yes"), ("keep-open", "yes"),
-                ("target-colorspace-hint", "yes"), ("tone-mapping", "auto"),
-                ("hdr-compute-peak", "yes"), ("video-rotate", "no"),
-                ("http-reconnect", "yes"), ("cache", "yes"), ("osd-level", "0")
-            ]
-            for (key, value) in options { _ = mpv_set_option_string(handle, key, value) }
+            configure(handle: handle, layer: view.metalLayer, headers: headers, muted: muted)
 
-            let initResult = mpv_initialize(handle)
-            guard initResult >= 0 else {
-                let message = String(cString: mpv_error_string(initResult))
-                DispatchQueue.main.async { self.onError?("MPV initialization failed: \(message)") }
-                stateLock.lock(); mpv = nil; stateLock.unlock()
-                mpv_terminate_destroy(handle)
+            let result = mpv_initialize(handle)
+            guard result >= 0 else {
+                let message = String(cString: mpv_error_string(result))
+                publishError("MPV initialization failed: \(message)")
+                shutdownHandle(handle)
                 return
             }
 
-            applyRequestHeaders(headers, to: handle)
-            setMuted(muted)
             _ = mpv_observe_property(handle, 1, "time-pos", MPV_FORMAT_DOUBLE)
             _ = mpv_observe_property(handle, 2, "duration", MPV_FORMAT_DOUBLE)
             _ = mpv_observe_property(handle, 3, "pause", MPV_FORMAT_FLAG)
 
-            DispatchQueue.main.async { self.onStatus?("MPV initialized; waiting for video surface…") }
+            mpv_set_wakeup_callback(
+                handle,
+                { context in
+                    guard let context else { return }
+                    let coordinator = Unmanaged<Coordinator>.fromOpaque(context).takeUnretainedValue()
+                    coordinator.readEvents()
+                },
+                UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+            )
+
             view.onReadyForPlayback = { [weak self] in
                 guard let self else { return }
-                self.issue(["loadfile", url.absoluteString, "replace"])
-                DispatchQueue.main.async { self.onStatus?("MPV opening stream…") }
+                self.load(url: url)
             }
 
+            publishStatus("MPV ready")
             view.setNeedsLayout()
             view.layoutIfNeeded()
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in self?.readEvents(handle: handle) }
+        }
+
+        private func configure(handle: OpaquePointer, layer: MPVMetalLayer, headers: [String: String], muted: Bool) {
+            _ = mpv_request_log_messages(handle, "warn")
+
+            // This is the same simple iOS rendering path used by the public MPVKit demo:
+            // gpu-next + Vulkan/MoltenVK + VideoToolbox on a CAMetalLayer.
+            var layerReference: Int64 = Int64(Int(bitPattern: Unmanaged.passUnretained(layer).toOpaque()))
+            _ = mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &layerReference)
+            _ = mpv_set_option_string(handle, "vo", "gpu-next")
+            _ = mpv_set_option_string(handle, "gpu-api", "vulkan")
+            _ = mpv_set_option_string(handle, "gpu-context", "moltenvk")
+            _ = mpv_set_option_string(handle, "hwdec", "videotoolbox")
+            _ = mpv_set_option_string(handle, "video-rotate", "no")
+            _ = mpv_set_option_string(handle, "subs-match-os-language", "yes")
+            _ = mpv_set_option_string(handle, "subs-fallback", "yes")
+            _ = mpv_set_option_string(handle, "keep-open", "yes")
+            _ = mpv_set_option_string(handle, "osd-level", "0")
+            _ = mpv_set_option_string(handle, "http-reconnect", "yes")
+            _ = mpv_set_option_string(handle, "cache", "yes")
+            applyRequestHeaders(headers, to: handle)
+
+            var muteValue: Int32 = muted ? 1 : 0
+            _ = mpv_set_property(handle, "mute", MPV_FORMAT_FLAG, &muteValue)
+            lastMuted = muted
+        }
+
+        private func applyRequestHeaders(_ headers: [String: String], to handle: OpaquePointer) {
+            let safeHeaders = headers.filter {
+                !$0.key.contains("\r") && !$0.key.contains("\n") &&
+                !$0.value.contains("\r") && !$0.value.contains("\n")
+            }
+            let fields = safeHeaders
+                .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+                .map { key, value in
+                    let escaped = value
+                        .replacingOccurrences(of: "\\", with: "\\\\")
+                        .replacingOccurrences(of: ",", with: "\\,")
+                    return "\(key): \(escaped)"
+                }
+                .joined(separator: ",")
+            _ = mpv_set_property_string(handle, "http-header-fields", fields)
+        }
+
+        private func load(url: URL) {
+            mpvQueue.async { [weak self] in
+                guard let self else { return }
+                guard let handle = self.activeHandle() else { return }
+                self.commandOnQueue(handle, ["loadfile", url.absoluteString, "replace"])
+                self.publishStatus("Opening stream…")
+            }
         }
 
         func handleCommand(commandID: Int, command: [String]?) {
@@ -117,95 +159,101 @@ struct MPVPlayerSurface: UIViewRepresentable {
             let shouldSend = commandID != lastCommandID && !isShuttingDown
             if shouldSend { lastCommandID = commandID }
             stateLock.unlock()
+
             guard shouldSend, let command, !command.isEmpty else { return }
-            issue(command)
-        }
 
-        private func issue(_ arguments: [String]) {
-            commandQueue.async { [weak self] in
-                guard let self else { return }
-                self.issueOnCommandQueue(arguments)
+            mpvQueue.async { [weak self] in
+                guard let self, let handle = self.activeHandle() else { return }
+                self.commandOnQueue(handle, command)
             }
-        }
-
-        private func issueOnCommandQueue(_ arguments: [String]) {
-            var pointers: [UnsafePointer<CChar>?] = arguments.map { value in
-                guard let pointer = strdup(value) else { return nil }
-                return UnsafePointer(pointer)
-            }
-            pointers.append(nil)
-            defer { for pointer in pointers { if let pointer { free(UnsafeMutablePointer(mutating: pointer)) } } }
-
-            stateLock.lock()
-            let handle = mpv
-            let shuttingDown = isShuttingDown
-            stateLock.unlock()
-            guard let handle, !shuttingDown else { return }
-
-            let result = pointers.withUnsafeMutableBufferPointer { buffer in
-                mpv_command(handle, buffer.baseAddress)
-            }
-
-            if result < 0 {
-                let message = String(cString: mpv_error_string(result))
-                DispatchQueue.main.async { self.onError?("MPV command failed: \(message)") }
-            }
-        }
-
-        private func applyRequestHeaders(_ headers: [String: String], to handle: OpaquePointer) {
-            let safeHeaders = headers.filter { !$0.key.contains("\r") && !$0.key.contains("\n") && !$0.value.contains("\r") && !$0.value.contains("\n") }
-            let fields = safeHeaders
-                .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
-                .map { key, value in
-                    let escapedValue = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ",", with: "\\,")
-                    return "\(key): \(escapedValue)"
-                }
-                .joined(separator: ",")
-            _ = mpv_set_property_string(handle, "http-header-fields", fields)
         }
 
         func setMuted(_ muted: Bool) {
             stateLock.lock()
-            guard lastMuted != muted, let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
+            guard lastMuted != muted, !isShuttingDown else { stateLock.unlock(); return }
             lastMuted = muted
             stateLock.unlock()
 
-            commandQueue.async { [weak self] in
-                guard let self else { return }
-                self.stateLock.lock()
-                let activeHandle = self.mpv
-                let shuttingDown = self.isShuttingDown
-                self.stateLock.unlock()
-                guard let activeHandle, !shuttingDown else { return }
+            mpvQueue.async { [weak self] in
+                guard let self, let handle = self.activeHandle() else { return }
                 var value: Int32 = muted ? 1 : 0
-                _ = mpv_set_property(activeHandle, "mute", MPV_FORMAT_FLAG, &value)
+                let result = mpv_set_property(handle, "mute", MPV_FORMAT_FLAG, &value)
+                if result < 0 {
+                    self.publishError("MPV mute command failed: \(String(cString: mpv_error_string(result)))")
+                }
             }
         }
 
-        private func readEvents(handle: OpaquePointer) {
-            while true {
-                stateLock.lock(); let shuttingDown = isShuttingDown; stateLock.unlock()
-                if shuttingDown { mpv_terminate_destroy(handle); return }
+        private func commandOnQueue(_ handle: OpaquePointer, _ arguments: [String]) {
+            guard !arguments.isEmpty else { return }
 
-                guard let event = mpv_wait_event(handle, 0.25) else { continue }
-
-                stateLock.lock(); let shouldStop = isShuttingDown; stateLock.unlock()
-                if shouldStop { mpv_terminate_destroy(handle); return }
-
-                if event.pointee.event_id == MPV_EVENT_NONE {
-                    publishPlaybackState(handle)
-                    continue
+            var cargs: [UnsafeMutablePointer<CChar>?] = arguments.map { strdup($0) }
+            cargs.append(nil)
+            defer {
+                for pointer in cargs {
+                    if let pointer { free(pointer) }
                 }
-                if event.pointee.event_id == MPV_EVENT_SHUTDOWN { mpv_terminate_destroy(handle); return }
-                if event.pointee.event_id == MPV_EVENT_FILE_LOADED {
-                    DispatchQueue.main.async { self.onStatus?("Stream loaded by MPV") }
-                } else if event.pointee.event_id == MPV_EVENT_END_FILE {
-                    if let data = event.pointee.data?.assumingMemoryBound(to: mpv_event_end_file.self).pointee, data.error < 0 {
-                        let message = String(cString: mpv_error_string(data.error))
-                        DispatchQueue.main.async { self.onError?("MPV couldn't play this stream: \(message)") }
+            }
+
+            let result = cargs.withUnsafeMutableBufferPointer { buffer in
+                mpv_command(handle, buffer.baseAddress)
+            }
+
+            if result < 0 {
+                publishError("MPV command failed: \(String(cString: mpv_error_string(result)))")
+            }
+        }
+
+        private func readEvents() {
+            mpvQueue.async { [weak self] in
+                guard let self else { return }
+                guard let handle = self.activeHandle() else { return }
+
+                while true {
+                    let event = mpv_wait_event(handle, 0)
+                    guard let event else { break }
+
+                    switch event.pointee.event_id {
+                    case MPV_EVENT_NONE:
+                        return
+
+                    case MPV_EVENT_PROPERTY_CHANGE:
+                        self.handlePropertyChange(event)
+
+                    case MPV_EVENT_FILE_LOADED:
+                        self.publishStatus("Stream loaded")
+                        self.publishPlaybackState(handle)
+
+                    case MPV_EVENT_END_FILE:
+                        if let data = event.pointee.data?.assumingMemoryBound(to: mpv_event_end_file.self).pointee,
+                           data.error < 0 {
+                            self.publishError("MPV couldn't play this stream: \(String(cString: mpv_error_string(data.error)))")
+                        }
+                        self.publishPlaybackState(handle)
+
+                    case MPV_EVENT_SHUTDOWN:
+                        return
+
+                    default:
+                        self.publishPlaybackState(handle)
                     }
                 }
-                publishPlaybackState(handle)
+            }
+        }
+
+        private func handlePropertyChange(_ event: UnsafePointer<mpv_event>) {
+            guard let rawData = event.pointee.data else { return }
+            let property = rawData.assumingMemoryBound(to: mpv_event_property.self).pointee
+            guard let namePointer = property.name else { return }
+            let name = String(cString: namePointer)
+
+            switch name {
+            case "time-pos", "duration", "pause":
+                if let handle = activeHandle() {
+                    publishPlaybackState(handle)
+                }
+            default:
+                break
             }
         }
 
@@ -216,8 +264,28 @@ struct MPVPlayerSurface: UIViewRepresentable {
             _ = mpv_get_property(handle, "time-pos", MPV_FORMAT_DOUBLE, &time)
             _ = mpv_get_property(handle, "duration", MPV_FORMAT_DOUBLE, &duration)
             _ = mpv_get_property(handle, "pause", MPV_FORMAT_FLAG, &paused)
-            guard time.isFinite, duration.isFinite else { return }
-            DispatchQueue.main.async { self.onPlaybackUpdate?(max(0, time), max(0, duration), paused != 0) }
+
+            let safeTime = time.isFinite ? max(0, time) : 0
+            let safeDuration = duration.isFinite ? max(0, duration) : 0
+            DispatchQueue.main.async { [weak self] in
+                self?.onPlaybackUpdate?(safeTime, safeDuration, paused != 0)
+            }
+        }
+
+        private func activeHandle() -> OpaquePointer? {
+            stateLock.lock()
+            let handle = mpv
+            let shuttingDown = isShuttingDown
+            stateLock.unlock()
+            return shuttingDown ? nil : handle
+        }
+
+        private func shutdownHandle(_ handle: OpaquePointer) {
+            stateLock.lock()
+            isShuttingDown = true
+            mpv = nil
+            stateLock.unlock()
+            mpv_terminate_destroy(handle)
         }
 
         func shutdown() {
@@ -226,8 +294,18 @@ struct MPVPlayerSurface: UIViewRepresentable {
             isShuttingDown = true
             mpv = nil
             stateLock.unlock()
+
             surface?.onReadyForPlayback = nil
             mpv_wakeup(handle)
+            mpv_terminate_destroy(handle)
+        }
+
+        private func publishStatus(_ message: String) {
+            DispatchQueue.main.async { [weak self] in self?.onStatus?(message) }
+        }
+
+        private func publishError(_ message: String) {
+            DispatchQueue.main.async { [weak self] in self?.onError?(message) }
         }
     }
 }
@@ -235,33 +313,45 @@ struct MPVPlayerSurface: UIViewRepresentable {
 final class MPVMetalLayer: CAMetalLayer {
     override var drawableSize: CGSize {
         get { super.drawableSize }
-        set { if Int(newValue.width) > 1 && Int(newValue.height) > 1 { super.drawableSize = newValue } }
+        set {
+            if Int(newValue.width) > 1 && Int(newValue.height) > 1 {
+                super.drawableSize = newValue
+            }
+        }
     }
 
     override var wantsExtendedDynamicRangeContent: Bool {
         get { super.wantsExtendedDynamicRangeContent }
         set {
-            if Thread.isMainThread { super.wantsExtendedDynamicRangeContent = newValue }
-            else { DispatchQueue.main.sync { super.wantsExtendedDynamicRangeContent = newValue } }
+            if Thread.isMainThread {
+                super.wantsExtendedDynamicRangeContent = newValue
+            } else {
+                DispatchQueue.main.sync { super.wantsExtendedDynamicRangeContent = newValue }
+            }
         }
     }
 }
 
 final class MPVMetalView: UIView {
     override class var layerClass: AnyClass { MPVMetalLayer.self }
+
     var metalLayer: MPVMetalLayer { layer as! MPVMetalLayer }
     var onReadyForPlayback: (() -> Void)?
     private var didSignalReadyForPlayback = false
 
     override func layoutSubviews() {
         super.layoutSubviews()
+
         let scale = window?.screen.nativeScale ?? UIScreen.main.nativeScale
         metalLayer.contentsScale = scale
         let size = CGSize(
             width: (bounds.width * scale).rounded(.toNearestOrAwayFromZero),
             height: (bounds.height * scale).rounded(.toNearestOrAwayFromZero)
         )
-        if size.width > 1, size.height > 1, metalLayer.drawableSize != size { metalLayer.drawableSize = size }
+        if size.width > 1, size.height > 1, metalLayer.drawableSize != size {
+            metalLayer.drawableSize = size
+        }
+
         if !didSignalReadyForPlayback, window != nil, bounds.width > 1, bounds.height > 1 {
             didSignalReadyForPlayback = true
             onReadyForPlayback?()
@@ -270,22 +360,20 @@ final class MPVMetalView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = .black
-        isUserInteractionEnabled = false
-        metalLayer.pixelFormat = .bgra8Unorm
-        metalLayer.framebufferOnly = true
-        metalLayer.contentsScale = UIScreen.main.nativeScale
-        metalLayer.wantsExtendedDynamicRangeContent = true
+        configureLayer()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
+        configureLayer()
+    }
+
+    private func configureLayer() {
         backgroundColor = .black
         isUserInteractionEnabled = false
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         metalLayer.contentsScale = UIScreen.main.nativeScale
-        metalLayer.framebufferOnly = true
         metalLayer.wantsExtendedDynamicRangeContent = true
     }
 }
