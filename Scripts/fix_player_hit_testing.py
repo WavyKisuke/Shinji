@@ -4,13 +4,19 @@ player = Path("Shinji/Views/PlayerView.swift")
 p = player.read_text(encoding="utf-8")
 
 # Keep the UIKit/Metal player surface passive so SwiftUI overlay controls receive taps.
+# Do not rewrite audio/subtitle commands back to aid/sid; the player uses the
+# canonical audio/sub commands supported by the current MPV bridge.
+
+# If the original surface tap handler is present, move the tap target to the
+# SwiftUI overlay so controls remain reliable above the Metal view.
 p = p.replace('''                playerSurface()\n                    .zIndex(0)\n                    .contentShape(Rectangle())\n                    .onTapGesture { toggleControls() }\n\n                if showControls && !controlsLocked {''', '''                playerSurface()\n                    .zIndex(0)\n                    .allowsHitTesting(false)\n\n                if !showControls || controlsLocked {\n                    Color.clear\n                        .contentShape(Rectangle())\n                        .onTapGesture { toggleControls() }\n                        .zIndex(1)\n                }\n\n                if showControls && !controlsLocked {''', 1)
 
+# Keep the MPV surface itself passive when that exact older surface block exists.
 p = p.replace('''        .background(.black)\n        .allowsHitTesting(true)\n    }\n\n    private func controlsOverlay()''', '''        .background(.black)\n    }\n\n    private func controlsOverlay()''', 1)
 
+p = p.replace('["cycle", "aid"]', '["cycle", "audio"]')
+p = p.replace('["cycle", "sid"]', '["cycle", "sub"]')
 p = p.replace('["cycle", "pause"]', '["set", "pause", isPlaying ? "yes" : "no"]')
-p = p.replace('["cycle", "audio"]', '["cycle", "aid"]')
-p = p.replace('["cycle", "sub"]', '["cycle", "sid"]')
 player.write_text(p, encoding="utf-8")
 
 mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
