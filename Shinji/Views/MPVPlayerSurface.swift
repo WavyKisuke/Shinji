@@ -100,7 +100,6 @@ final class MPVMetalViewController: UIViewController {
 
         _ = mpv_request_log_messages(handle, "warn")
 
-        // Simple iOS libmpv path: GPU-next -> Vulkan/MoltenVK -> VideoToolbox.
         var layerReference: Int64 = Int64(Int(bitPattern: Unmanaged.passUnretained(metalLayer).toOpaque()))
         _ = mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &layerReference)
         _ = mpv_set_option_string(handle, "vo", "gpu-next")
@@ -195,13 +194,15 @@ final class MPVMetalViewController: UIViewController {
     }
 
     private func execute(_ arguments: [String], on handle: OpaquePointer) {
-        var cargs: [UnsafeMutablePointer<CChar>?] = arguments.map { strdup($0) }
-        cargs.append(nil)
+        var owned: [UnsafeMutablePointer<CChar>] = arguments.map { strdup($0) }
         defer {
-            for pointer in cargs where pointer != nil {
+            for pointer in owned {
                 free(pointer)
             }
         }
+
+        var cargs: [UnsafePointer<CChar>?] = owned.map { UnsafePointer($0) }
+        cargs.append(nil)
 
         let result = cargs.withUnsafeMutableBufferPointer { buffer in
             mpv_command(handle, buffer.baseAddress)
