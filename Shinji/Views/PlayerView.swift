@@ -26,8 +26,6 @@ struct PlayerView: View {
             ZStack {
                 Color.black.ignoresSafeArea().zIndex(-2)
                 playerSurface().zIndex(0).allowsHitTesting(false)
-
-                // Dedicated video tap surface. It sits below the controls so buttons keep their hit targets.
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture { handleVideoTap() }
@@ -68,11 +66,11 @@ struct PlayerView: View {
         }
     }
 
+    // Seek directly in MPV instead of calculating a target from SwiftUI's last-known position.
+    // This avoids stale position updates causing backward seeks to jump to 0.
     private func sendSeek(seconds: Int) {
-        let delta = Double(seconds)
-        let target = max(0, duration > 0 ? min(duration, position + delta) : position + delta)
-        position = target
-        sendCommand("set time-pos \(target)")
+        guard seconds != 0 else { return }
+        sendCommand("seek \(seconds) relative")
     }
 
     private func playerSurface() -> some View {
