@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct PlayerView: View {
     let url: URL
@@ -26,8 +27,6 @@ struct PlayerView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                // One native MPV surface for the entire player lifetime.
-                // SwiftUI owns only the controls; MPV owns the video surface.
                 playerSurface()
                     .zIndex(0)
                     .allowsHitTesting(false)
@@ -386,7 +385,7 @@ private struct PlayerSettingsSheet: View {
             List {
                 Section("Video") {
                     Button("Fit") { sendCommand("set video-unscaled no"); dismiss() }
-                    Button("Fill") { sendCommand("set video-unscaled yes"); dismiss() }
+                    Button("Original Size") { sendCommand("set video-unscaled yes"); dismiss() }
                     Button("Reset Video Zoom") { sendCommand("set video-zoom 0"); dismiss() }
                 }
                 Section("Playback") {
