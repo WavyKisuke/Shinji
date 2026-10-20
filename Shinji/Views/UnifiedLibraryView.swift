@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum MediaLibraryKind: Equatable {
+    case all
     case movies
     case tvShows
 }
@@ -11,8 +12,16 @@ struct UnifiedLibraryView: View {
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
 
     private var savedItems: [WatchlistItem] {
-        watchlistStore.items.filter {
-            kind == .movies ? $0.type.lowercased() == "movie" : ["series", "tv", "tvshow", "tv shows"].contains($0.type.lowercased())
+        watchlistStore.items.filter { item in
+            let type = item.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            switch kind {
+            case .all:
+                return type == "movie" || ["series", "tv", "tvshow", "tv shows", "show"].contains(type)
+            case .movies:
+                return type == "movie"
+            case .tvShows:
+                return ["series", "tv", "tvshow", "tv shows", "show"].contains(type)
+            }
         }
     }
 
@@ -38,9 +47,17 @@ struct UnifiedLibraryView: View {
             Text("Library")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
-            Text(kind == .movies ? "Movies you picked or favorited" : "Shows you picked or favorited")
+            Text(subtitle)
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.55))
+        }
+    }
+
+    private var subtitle: String {
+        switch kind {
+        case .all: return "Movies and shows you picked or favorited"
+        case .movies: return "Movies you picked or favorited"
+        case .tvShows: return "Shows you picked or favorited"
         }
     }
 
@@ -48,12 +65,12 @@ struct UnifiedLibraryView: View {
         VStack(spacing: 18) {
             ZStack {
                 Circle().fill(Color(hex: accentHex).opacity(0.12)).frame(width: 74, height: 74)
-                Image(systemName: kind == .movies ? "film.stack" : "tv")
+                Image(systemName: kind == .tvShows ? "tv" : "film.stack")
                     .font(.system(size: 29, weight: .medium))
                     .foregroundStyle(Color(hex: accentHex))
             }
             VStack(spacing: 7) {
-                Text(kind == .movies ? "No movies saved" : "No shows saved")
+                Text(kind == .all ? "Your library is empty" : kind == .movies ? "No movies saved" : "No shows saved")
                     .font(.system(size: 21, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 Text("Open a movie or show and tap Add to Library. It will appear here immediately.")
@@ -89,23 +106,36 @@ struct UnifiedLibraryView: View {
                     if let string = item.posterURL, let url = URL(string: string) {
                         AsyncImage(url: url) { phase in
                             if case .success(let image) = phase { image.resizable().scaledToFill() } else { posterPlaceholder }
-                        }.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    } else { posterPlaceholder.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    } else {
+                        posterPlaceholder.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
                     Image(systemName: "bookmark.fill")
                         .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
                         .padding(8).background(.black.opacity(0.62), in: Circle()).padding(7)
                 }
-                Text(item.title).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                Text(item.title)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button(role: .destructive) { watchlistStore.remove(item) } label: { Label("Remove from Library", systemImage: "trash") }
+            Button(role: .destructive) { watchlistStore.remove(item) } label: {
+                Label("Remove from Library", systemImage: "trash")
+            }
         }
     }
 
     private var posterPlaceholder: some View {
-        Rectangle().fill(Color.white.opacity(0.06)).overlay { Image(systemName: kind == .movies ? "film" : "tv").font(.system(size: 25, weight: .light)).foregroundStyle(.white.opacity(0.35)) }
+        Rectangle().fill(Color.white.opacity(0.06)).overlay {
+            Image(systemName: kind == .tvShows ? "tv" : "film")
+                .font(.system(size: 25, weight: .light))
+                .foregroundStyle(.white.opacity(0.35))
+        }
     }
 }
 
@@ -129,15 +159,21 @@ private struct SavedLibraryItemView: View {
                 Text(item.title).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white)
                 if let description = item.description, !description.isEmpty { Text(description).foregroundStyle(.white.opacity(0.72)) }
                 HStack(spacing: 12) {
-                    Button { watchlistStore.remove(item) } label: { Label("Remove", systemImage: "bookmark.slash").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
-                    Button { Task { await play() } } label: { Label(loading ? "Finding…" : "Play", systemImage: "play.fill").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent).disabled(loading)
+                    Button { watchlistStore.remove(item) } label: {
+                        Label("Remove", systemImage: "bookmark.slash").frame(maxWidth: .infinity)
+                    }.buttonStyle(.bordered)
+                    Button { Task { await play() } } label: {
+                        Label(loading ? "Finding…" : "Play", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    }.buttonStyle(.borderedProminent).disabled(loading)
                 }
             }.padding(20)
         }
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .fullScreenCover(isPresented: $showPlayer) {
-            if let stream = selectedStream { PlayerView(url: stream.url, title: item.title, headers: stream.headers, posterURL: item.posterURL.flatMap(URL.init(string:))) }
+            if let stream = selectedStream {
+                PlayerView(url: stream.url, title: item.title, headers: stream.headers, posterURL: item.posterURL.flatMap(URL.init(string:)))
+            }
         }
     }
 
