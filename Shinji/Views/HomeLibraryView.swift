@@ -47,7 +47,13 @@ struct HomeLibraryView: View {
         if !heroItems.isEmpty {
             TabView(selection: $heroIndex) {
                 ForEach(Array(heroItems.enumerated()), id: \.element.id) { index, item in
-                    heroCard(item).tag(index)
+                    NavigationLink {
+                        CatalogItemDetailView(item: item)
+                    } label: {
+                        heroCard(item)
+                    }
+                    .buttonStyle(.plain)
+                    .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -82,7 +88,7 @@ struct HomeLibraryView: View {
             VStack(spacing: 12) {
                 Text("\(item.type.capitalized)  •  \(item.year ?? "")")
                     .font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                Button("View Details") { }
+                Text("View Details")
                     .font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(.black)
                     .padding(.horizontal, 35).frame(height: 48).background(.white, in: Capsule())
             }
@@ -118,8 +124,10 @@ struct HomeLibraryView: View {
                     HStack(alignment: .top, spacing: 16) {
                         ForEach(items) { item in
                             NavigationLink {
-                                CatalogGridPage(title: title, items: items, accentHex: accentHex, glowHex: glowHex, onSelect: { _ in })
-                            } label: { catalogCard(item) }
+                                CatalogItemDetailView(item: item)
+                            } label: {
+                                catalogCard(item)
+                            }
                             .buttonStyle(.plain)
                         }
                     }
