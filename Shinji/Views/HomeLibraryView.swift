@@ -21,10 +21,10 @@ struct HomeLibraryView: View {
                 VStack(alignment: .leading, spacing: 30) {
                     header
                     keepWatchingSection
-                    catalogSection(title: "Popular - Movies", items: popularMovies)
-                    catalogSection(title: "Popular - Series", items: popularSeries)
-                    catalogSection(title: "Featured - Movies", items: featuredMovies.isEmpty ? popularMovies : featuredMovies)
-                    catalogSection(title: "Featured - Series", items: featuredSeries.isEmpty ? popularSeries : featuredSeries)
+                    catalogSection(title: "Popular - Movies", previewItems: popularMovies, allItems: movies)
+                    catalogSection(title: "Popular - Series", previewItems: popularSeries, allItems: series)
+                    catalogSection(title: "Featured - Movies", previewItems: featuredMovies.isEmpty ? popularMovies : featuredMovies, allItems: movies)
+                    catalogSection(title: "Featured - Series", previewItems: featuredSeries.isEmpty ? popularSeries : featuredSeries, allItems: series)
                 }
                 .padding(.top, 10)
                 .padding(.bottom, 36)
@@ -69,24 +69,25 @@ struct HomeLibraryView: View {
     }
 
     @ViewBuilder
-    private func catalogSection(title: String, items: [AddonCatalogItem]) -> some View {
-        if !items.isEmpty {
+    private func catalogSection(title: String, previewItems: [AddonCatalogItem], allItems: [AddonCatalogItem]) -> some View {
+        if !previewItems.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center) {
                     Text(title).font(.system(size: 21, weight: .bold, design: .rounded)).foregroundStyle(.white)
                     Spacer()
                     NavigationLink {
-                        CatalogGridPage(title: title, items: items, accentHex: accentHex, glowHex: glowHex, onSelect: { _ in })
+                        CatalogGridPage(title: title, items: allItems, accentHex: accentHex, glowHex: glowHex, onSelect: { _ in })
                     } label: {
                         Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundStyle(.white.opacity(0.78)).frame(width: 42, height: 42).background(Color.white.opacity(0.07), in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .disabled(allItems.isEmpty)
                 }
                 .padding(.horizontal, 20)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 13) {
-                        ForEach(items) { item in
+                        ForEach(previewItems) { item in
                             NavigationLink {
                                 UnifiedLibraryView(kind: item.type.lowercased() == "movie" ? .movies : .tvShows)
                             } label: { catalogCard(item) }
