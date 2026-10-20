@@ -2,8 +2,6 @@ from pathlib import Path
 
 player = Path("Shinji/Views/PlayerView.swift")
 text = player.read_text(encoding="utf-8")
-
-# mpv's documented track-switching input commands.
 text = text.replace('["cycle", "aid"]', '["cycle", "audio"]')
 text = text.replace('["cycle", "sid"]', '["cycle", "sub"]')
 text = text.replace(
@@ -11,12 +9,10 @@ text = text.replace(
     'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])'
 )
 
-# Dedicated playback-speed sheet/button, inserted once and safe on repeated CI runs.
 if 'showPlaybackSpeed' not in text:
     text = text.replace(
         '    @State private var showSettings = false\n',
-        '    @State private var showSettings = false\n    @State private var showPlaybackSpeed = false\n',
-        1
+        '    @State private var showSettings = false\n    @State private var showPlaybackSpeed = false\n', 1
     )
     text = text.replace(
         '        .sheet(isPresented: $showSettings) {\n',
@@ -26,8 +22,7 @@ if 'showPlaybackSpeed' not in text:
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSettings) {
-''',
-        1
+''', 1
     )
     text = text.replace(
         '                bottomButton("gearshape", "Settings") { showSettings = true }\n',
@@ -35,8 +30,7 @@ if 'showPlaybackSpeed' not in text:
                     showPlaybackSpeed = true
                 }
                 bottomButton("gearshape", "Settings") { showSettings = true }
-''',
-        1
+''', 1
     )
     marker = '\nprivate struct PlayerSettingsSheet: View {'
     speed_sheet = '''
@@ -46,13 +40,8 @@ private struct PlaybackSpeedSheet: View {
     @Environment(\\.dismiss) private var dismiss
 
     private let speeds: [(String, String)] = [
-        ("0.5×", "0.5"),
-        ("0.75×", "0.75"),
-        ("Normal", "1"),
-        ("1.25×", "1.25"),
-        ("1.5×", "1.5"),
-        ("1.75×", "1.75"),
-        ("2×", "2")
+        ("0.5×", "0.5"), ("0.75×", "0.75"), ("Normal", "1"),
+        ("1.25×", "1.25"), ("1.5×", "1.5"), ("1.75×", "1.75"), ("2×", "2")
     ]
 
     var body: some View {
@@ -98,13 +87,9 @@ old = '''    private func execute(_ arguments: [String], on handle: OpaquePointe
 '''
 new = '''    private func execute(_ arguments: [String], on handle: OpaquePointer) {
         let owned: [UnsafeMutablePointer<CChar>] = arguments.compactMap { strdup($0) }
-        defer {
-            for pointer in owned { free(pointer) }
-        }
-
+        defer { for pointer in owned { free(pointer) } }
         var cargs: [UnsafePointer<CChar>?] = owned.map { UnsafePointer($0) }
         cargs.append(nil)
-
         let result = cargs.withUnsafeMutableBufferPointer { buffer in
             mpv_command(handle, buffer.baseAddress)
         }
