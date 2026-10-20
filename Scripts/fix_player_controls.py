@@ -8,7 +8,8 @@ text = text.replace('["cycle", "sub"]', '["cycle", "sid"]')
 text = text.replace('sendCommand(["cycle", "pause"])', 'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])')
 player.write_text(text, encoding="utf-8")
 
-# Make command execution use a stable, null-terminated C argv buffer.
+# Keep the libmpv argv buffer mutable. MPVKit exposes mpv_command as taking
+# UnsafeMutablePointer<UnsafePointer<CChar>?> on this toolchain.
 mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
 mpv_text = mpv.read_text(encoding="utf-8")
 old = '''    private func execute(_ arguments: [String], on handle: OpaquePointer) {
@@ -39,7 +40,7 @@ new = '''    private func execute(_ arguments: [String], on handle: OpaquePointe
         var cargs: [UnsafePointer<CChar>?] = owned.map { UnsafePointer($0) }
         cargs.append(nil)
 
-        let result = cargs.withUnsafeBufferPointer { buffer in
+        let result = cargs.withUnsafeMutableBufferPointer { buffer in
             mpv_command(handle, buffer.baseAddress)
         }
         if result < 0 {
