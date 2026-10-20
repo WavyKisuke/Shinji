@@ -45,6 +45,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
         private var lastCommandID = 0
         private var isShuttingDown = false
         private let stateLock = NSLock()
+        private var pendingCommands: [String] = []
 
         var onStatus: ((String) -> Void)?
         var onError: ((String) -> Void)?
@@ -102,6 +103,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
             view.onReadyForPlayback = { [weak self] in
                 guard let self else { return }
                 self.issue(["loadfile", url.absoluteString, "replace"])
+                self.flushPendingCommands()
                 DispatchQueue.main.async { self.onStatus?("MPV opening stream…") }
             }
 
@@ -114,12 +116,31 @@ struct MPVPlayerSurface: UIViewRepresentable {
             stateLock.lock()
             let shouldSend = commandID != lastCommandID && !isShuttingDown
             if shouldSend { lastCommandID = commandID }
+            let ready = mpv != nil
             stateLock.unlock()
             guard shouldSend, let command, !command.isEmpty else { return }
-            issue(command.split(separator: " ").map(String.init))
+
+            if ready {
+                issue(command.split(separator: " ").map(String.init))
+            } else {
+                stateLock.lock()
+                pendingCommands.append(command)
+                stateLock.unlock()
+            }
+        }
+
+        private func flushPendingCommands() {
+            stateLock.lock()
+            let commands = pendingCommands
+            pendingCommands.removeAll()
+            stateLock.unlock()
+            for command in commands {
+                issue(command.split(separator: " ").map(String.init))
+            }
         }
 
         private func issue(_ arguments: [String]) {
+            guard !arguments.isEmpty else { return }
             var pointers: [UnsafePointer<CChar>?] = arguments.map { value in
                 guard let pointer = strdup(value) else { return nil }
                 return UnsafePointer(pointer)
@@ -129,7 +150,9 @@ struct MPVPlayerSurface: UIViewRepresentable {
 
             stateLock.lock()
             guard let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
-            let result = pointers.withUnsafeMutableBufferPointer { buffer in mpv_command(handle, buffer.baseAddress) }
+            let result = pointers.withUnsafeMutableBufferPointer { buffer in
+                mpv_command(handle, buffer.baseAddress)
+            }
             stateLock.unlock()
 
             if result < 0 {
@@ -201,6 +224,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
             guard let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
             isShuttingDown = true
             mpv = nil
+            pendingCommands.removeAll()
             stateLock.unlock()
             surface?.onReadyForPlayback = nil
             mpv_wakeup(handle)
