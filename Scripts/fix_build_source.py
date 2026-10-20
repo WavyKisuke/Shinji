@@ -30,8 +30,7 @@ new_matches = '''    private func matches(_ item: AddonCatalogItem, genre: Strin
 '''
 text = text.replace(old_matches, new_matches, 1)
 
-# The Featured Picks arrow opens a dedicated page instead of doing nothing or
-# merely scrolling a small shelf.
+# Featured Picks opens a full catalog page.
 old_featured_arrow = '''                Spacer()
                 Image(systemName: "arrow.right")
                     .foregroundStyle(Color(hex: accentHex))
@@ -56,6 +55,33 @@ new_featured_arrow = '''                Spacer()
                 .disabled(filteredItems.isEmpty)
 '''
 text = text.replace(old_featured_arrow, new_featured_arrow, 1)
+
+# Every shelf chevron opens the complete shelf on its own page.
+old_shelf_arrow = '''                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.6))
+'''
+new_shelf_arrow = '''                    Spacer()
+                    NavigationLink {
+                        CatalogGridPage(
+                            title: title,
+                            items: items,
+                            accentHex: accentHex,
+                            glowHex: glowHex,
+                            onSelect: { selectedItem = $0 }
+                        )
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color(hex: accentHex))
+                            .frame(width: 40, height: 40)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+'''
+text = text.replace(old_shelf_arrow, new_shelf_arrow, 1)
+unified.write_text(text, encoding="utf-8")
 
 # Carry genre metadata from Stremio catalog responses into the model.
 addon = Path("Shinji/Services/AddonStore.swift")
@@ -200,9 +226,10 @@ section = '''    @ViewBuilder
 h = h.replace(marker, section + marker, 1)
 home.write_text(h, encoding="utf-8")
 
-# Dedicated full-page catalog grid used by the Featured Picks arrow.
+# Dedicated full-page catalog grid used by all shelf arrows.
 grid = Path("Shinji/Views/CatalogGridPage.swift")
-grid.write_text('''import SwiftUI
+if not grid.exists():
+    grid.write_text('''import SwiftUI
 
 struct CatalogGridPage: View {
     let title: String
@@ -252,5 +279,61 @@ struct CatalogGridPage: View {
     }
 }
 ''', encoding="utf-8")
+
+# Upgrade the older LibraryView too: its Featured/section arrows now open full pages.
+legacy = Path("Shinji/Views/LibraryView.swift")
+legacy_text = legacy.read_text(encoding="utf-8")
+old_legacy_featured = '''                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: accentHex))
+'''
+new_legacy_featured = '''                Spacer()
+                NavigationLink {
+                    CatalogGridPage(
+                        title: searchText.isEmpty ? sectionTitle : "Search results",
+                        items: visibleItems.compactMap { item in addonStore.catalogItems.first(where: { $0.id == item.id && $0.addonName == item.subtitle }) },
+                        accentHex: accentHex,
+                        glowHex: glowHex,
+                        onSelect: { selectedItem = $0 }
+                    )
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color(hex: accentHex))
+                        .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(visibleItems.isEmpty)
+'''
+legacy_text = legacy_text.replace(old_legacy_featured, new_legacy_featured, 1)
+# Replace the legacy rotating shelf chevron with a full page for that shelf.
+old_legacy_chevron = '''                Button {
+                    let step = 3
+                    let position = shelfPositions[title, default: 0]
+                    let next = position + step >= items.count ? 0 : position + step
+                    shelfPositions[title] = next
+                } label {
+'''
+new_legacy_chevron = '''                NavigationLink {
+                    CatalogGridPage(
+                        title: title,
+                        items: items,
+                        accentHex: accentHex,
+                        glowHex: glowHex,
+                        onSelect: { selectedItem = $0 }
+                    )
+                } label: {
+'''
+legacy_text = legacy_text.replace(old_legacy_chevron, new_legacy_chevron, 1)
+legacy_text = legacy_text.replace('''                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+''', '''                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+''', 1)
+legacy.write_text(legacy_text, encoding="utf-8")
 
 print("CI source repairs applied.")
