@@ -2,6 +2,7 @@ import UIKit
 
 private let lockPlayerToLandscapeNotification = Notification.Name("ShinjiPlayerLockLandscape")
 private let unlockPlayerOrientationNotification = Notification.Name("ShinjiPlayerUnlockOrientation")
+private let playerDidAppearNotification = Notification.Name("ShinjiPlayerDidAppear")
 
 final class OrientationLockAppDelegate: NSObject, UIApplicationDelegate {
     func application(
@@ -34,6 +35,11 @@ final class OrientationLockCoordinator {
         guard observers.isEmpty else { return }
 
         let center = NotificationCenter.default
+        observers.append(
+            center.addObserver(forName: playerDidAppearNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.playerIsActive = true
+            }
+        )
         observers.append(
             center.addObserver(forName: lockPlayerToLandscapeNotification, object: nil, queue: .main) { [weak self] _ in
                 self?.playerIsActive = true
@@ -68,6 +74,10 @@ final class OrientationLockCoordinator {
             }
         )
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+    }
+
+    static func playerDidAppear() {
+        NotificationCenter.default.post(name: playerDidAppearNotification, object: nil)
     }
 
     static func setPlayerFullscreen(_ enabled: Bool) {
