@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: xcodebuild -version
       - run: brew install xcodegen
+      - name: Apply library performance optimizations
+        run: python3 Scripts/optimize_library_build.py
       - run: xcodegen generate
       - name: Build unsigned IPA
         run: |
@@ -33,7 +35,6 @@ jobs:
           cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/Shinji.app"
           cd "$RUNNER_TEMP"
           /usr/bin/zip -qry "$GITHUB_WORKSPACE/Shinji-unsigned.ipa" Payload
-      # Trigger a fresh build for the latest player changes.
       - uses: actions/upload-artifact@v4
         with:
           name: Shinji-player-fix-unsigned-ipa
