@@ -3,6 +3,8 @@ import SwiftUI
 struct MainTabView: View {
     var body: some View {
         TabView {
+            HomeLibraryView()
+                .tabItem { Label("Library", systemImage: "books.vertical.fill") }
             UnifiedLibraryView(kind: .movies)
                 .tabItem { Label("Movies", systemImage: "film") }
             UnifiedLibraryView(kind: .tvShows)
