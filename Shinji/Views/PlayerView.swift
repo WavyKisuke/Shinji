@@ -17,7 +17,7 @@ struct PlayerView: View {
     @State private var position: Double = 0
     @State private var duration: Double = 0
     @State private var commandID = 0
-    @State private var command: String?
+    @State private var command: [String]?
     @State private var hideControlsTask: Task<Void, Never>?
     @State private var controlsLocked = false
     @State private var showSettings = false
@@ -28,9 +28,7 @@ struct PlayerView: View {
                 playerSurface()
                     .zIndex(0)
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        toggleControls()
-                    }
+                    .onTapGesture { toggleControls() }
 
                 if showControls {
                     controlsOverlay()
@@ -119,14 +117,8 @@ struct PlayerView: View {
             return
         }
 
-        withAnimation(.easeInOut(duration: 0.18)) {
-            showControls.toggle()
-        }
-        if showControls {
-            scheduleHide()
-        } else {
-            hideControlsTask?.cancel()
-        }
+        withAnimation(.easeInOut(duration: 0.18)) { showControls.toggle() }
+        if showControls { scheduleHide() } else { hideControlsTask?.cancel() }
     }
 
     private func playerSurface() -> some View {
@@ -194,9 +186,7 @@ struct PlayerView: View {
 
             if !isFullscreen {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline.weight(.semibold))
-                        .lineLimit(1)
+                    Text(title).font(.headline.weight(.semibold)).lineLimit(1)
                     Text(playbackDiagnostics)
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.65))
@@ -236,7 +226,7 @@ struct PlayerView: View {
         HStack(spacing: 46) {
             seekButton(seconds: -10)
             Button {
-                sendCommand("cycle pause")
+                sendCommand(["cycle", "pause"])
                 scheduleHide()
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
@@ -261,7 +251,7 @@ struct PlayerView: View {
                         set: { newValue in
                             guard duration > 0 else { return }
                             position = newValue
-                            sendCommand("seek \(newValue) absolute")
+                            sendCommand(["seek", String(newValue), "absolute"])
                         }
                     ),
                     in: 0...max(duration, 1)
@@ -273,17 +263,17 @@ struct PlayerView: View {
 
             HStack(spacing: 22) {
                 bottomButton("waveform", "Audio") {
-                    sendCommand("cycle audio")
+                    sendCommand(["cycle", "audio"])
                     scheduleHide()
                 }
                 bottomButton("captions.bubble", "Subtitles") {
-                    sendCommand("cycle sub")
+                    sendCommand(["cycle", "sub"])
                     scheduleHide()
                 }
                 bottomButton(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", isMuted ? "Unmute" : "Mute") {
                     let nextMuted = !isMuted
                     isMuted = nextMuted
-                    sendCommand("set mute \(nextMuted ? "yes" : "no")")
+                    sendCommand(["set", "mute", nextMuted ? "yes" : "no"])
                     scheduleHide()
                 }
                 bottomButton("gearshape", "Settings") { showSettings = true }
@@ -297,7 +287,7 @@ struct PlayerView: View {
 
     private func seekButton(seconds: Int) -> some View {
         Button {
-            sendCommand("seek \(seconds) relative")
+            sendCommand(["seek", String(seconds), "relative"])
             if duration > 0 { position = max(0, min(duration, position + Double(seconds))) }
             scheduleHide()
         } label: {
@@ -329,7 +319,7 @@ struct PlayerView: View {
             Image(systemName: "exclamationmark.triangle.fill").font(.title)
             Text("Couldn't play this stream").font(.headline)
             Text(message).font(.footnote).foregroundStyle(.white.opacity(0.72)).multilineTextAlignment(.center)
-            Button("Try Again") { startInternalPlayback() }.buttonStyle(.borderedProminent)
+            Button("Try Again") { startInternalPlayback(reloadStream: true) }.buttonStyle(.borderedProminent)
         }
         .foregroundStyle(.white)
         .padding(28)
@@ -338,21 +328,25 @@ struct PlayerView: View {
         .padding(24)
     }
 
-    private func startInternalPlayback() {
+    private func startInternalPlayback(reloadStream: Bool = false) {
         playbackError = nil
         isPreparingPlayback = true
         playbackDiagnostics = "Loading…"
         position = 0
         duration = 0
-        command = nil
-        commandID += 1
         showControls = true
         controlsLocked = false
+        if reloadStream {
+            sendCommand(["loadfile", url.absoluteString, "replace"])
+        } else {
+            command = nil
+            commandID += 1
+        }
         scheduleHide()
         PlaybackAudio.configureToMixWithOtherAudio()
     }
 
-    private func sendCommand(_ value: String) {
+    private func sendCommand(_ value: [String]) {
         command = value
         commandID += 1
     }
@@ -392,22 +386,22 @@ struct PlayerView: View {
 }
 
 private struct PlayerSettingsSheet: View {
-    let sendCommand: (String) -> Void
+    let sendCommand: ([String]) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
                 Section("Video") {
-                    Button("Fit") { sendCommand("set video-unscaled no"); dismiss() }
-                    Button("Original Size") { sendCommand("set video-unscaled yes"); dismiss() }
-                    Button("Reset Video Zoom") { sendCommand("set video-zoom 0"); dismiss() }
+                    Button("Fit") { sendCommand(["set", "video-unscaled", "no"]); dismiss() }
+                    Button("Original Size") { sendCommand(["set", "video-unscaled", "yes"]); dismiss() }
+                    Button("Reset Video Zoom") { sendCommand(["set", "video-zoom", "0"]); dismiss() }
                 }
                 Section("Playback") {
-                    Button("Normal Speed") { sendCommand("set speed 1"); dismiss() }
-                    Button("1.25×") { sendCommand("set speed 1.25"); dismiss() }
-                    Button("1.5×") { sendCommand("set speed 1.5"); dismiss() }
-                    Button("2×") { sendCommand("set speed 2"); dismiss() }
+                    Button("Normal Speed") { sendCommand(["set", "speed", "1"]); dismiss() }
+                    Button("1.25×") { sendCommand(["set", "speed", "1.25"]); dismiss() }
+                    Button("1.5×") { sendCommand(["set", "speed", "1.5"]); dismiss() }
+                    Button("2×") { sendCommand(["set", "speed", "2"]); dismiss() }
                 }
             }
             .navigationTitle("Player Settings")
