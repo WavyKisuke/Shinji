@@ -3,19 +3,16 @@ from pathlib import Path
 player = Path("Shinji/Views/PlayerView.swift")
 text = player.read_text(encoding="utf-8")
 
-# mpv's track-switching input commands. Do not rewrite these to aid/sid:
-# aid and sid are runtime selection properties; `audio` and `sub` are the
-# documented cycling commands used by the player input layer.
+# mpv's documented track-switching input commands.
 text = text.replace('["cycle", "aid"]', '["cycle", "audio"]')
 text = text.replace('["cycle", "sid"]', '["cycle", "sub"]')
-
-# Deterministic pause/play.
 text = text.replace(
     'sendCommand(["cycle", "pause"])',
     'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])'
 )
 
-# Dedicated playback-speed sheet and button.
+# Add a dedicated playback-speed control. It uses mpv's documented runtime
+# `speed` property instead of trying to emulate speed changes with seeks.
 if 'showPlaybackSpeed' not in text:
     text = text.replace(
         '    @State private var showSettings = false\n',
@@ -75,7 +72,7 @@ private struct PlaybackSpeedSheet: View {
 }
 '''
     if marker in text:
-        text = text.replace(marker, speed_sheet + '\nprivate struct PlayerSettingsSheet: View {', 1)
+        text = text.replace(marker, speed_sheet + 'private struct PlayerSettingsSheet: View {', 1)
 
 player.write_text(text, encoding="utf-8")
 
