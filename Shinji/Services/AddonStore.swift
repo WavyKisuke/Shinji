@@ -14,6 +14,7 @@ struct AddonCatalogItem: Identifiable, Hashable {
     let name: String
     let posterURL: URL?
     let description: String?
+    let year: String?
     let addonName: String
 }
 
@@ -115,9 +116,6 @@ final class AddonStore: ObservableObject {
         streamStatus = "Searching installed add-ons for streams…"
         defer { isLoadingStreams = false }
 
-        // A catalog provider often supplies metadata only. Search every installed
-        // Stremio add-on rather than assuming the provider that listed the title
-        // also provides playable streams.
         let candidates = addons.filter { $0.format == "Stremio" && $0.manifestURL != nil }
         guard !candidates.isEmpty else {
             streamStatus = "Install a Stremio add-on that provides stream sources to play this title."
@@ -243,12 +241,19 @@ final class AddonStore: ObservableObject {
                   let name = meta["name"] as? String else { return nil }
             let itemType = (meta["type"] as? String) ?? type
             let poster = (meta["poster"] as? String).flatMap(URL.init(string:))
+            let year: String? = {
+                if let value = meta["releaseInfo"] as? String, !value.isEmpty { return String(value.prefix(4)) }
+                if let value = meta["year"] as? Int { return String(value) }
+                if let value = meta["year"] as? String, !value.isEmpty { return String(value.prefix(4)) }
+                return nil
+            }()
             return AddonCatalogItem(
                 id: id,
                 type: itemType,
                 name: name,
                 posterURL: poster,
                 description: meta["description"] as? String,
+                year: year,
                 addonName: addonName
             )
         }
@@ -258,19 +263,15 @@ final class AddonStore: ObservableObject {
         // Avoid echoing full URLs, which may contain private source tokens.
         if let addonError = error as? AddonError {
             switch addonError {
-            case .httpStatus(let code): return "The source returned HTTP \(code). Check that the manifest URL is valid and accessible."
+            case .duplicate(let name): return "\(name) is already installed."
             default: return addonError.localizedDescription
             }
         }
-        return "Could not load the add-on. Check the URL and connection; private URL details are hidden."
+        return error.localizedDescription
     }
 
     private func saveAddons() {
-        do {
-            let data = try JSONEncoder().encode(addons)
-            UserDefaults.standard.set(data, forKey: storageKey)
-        } catch {
-            statusMessage = "Could not save the installed add-ons."
-        }
+        guard let data = try? JSONEncoder().encode(addons) else { return }
+        UserDefaults.standard.set(data, forKey: storageKey)
     }
 }
