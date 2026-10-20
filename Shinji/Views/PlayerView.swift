@@ -70,8 +70,17 @@ struct PlayerView: View {
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
             hideParentTabBar(true)
             startInternalPlayback()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            let orientation = UIDevice.current.orientation
+            if orientation == .landscapeLeft || orientation == .landscapeRight {
+                if !isFullscreen { isFullscreen = true }
+            } else if orientation == .portrait || orientation == .portraitUpsideDown {
+                if isFullscreen { isFullscreen = false }
+            }
         }
         .onChange(of: isFullscreen) { fullscreen in
             OrientationLockCoordinator.setPlayerFullscreen(fullscreen)
@@ -81,6 +90,7 @@ struct PlayerView: View {
         }
         .onDisappear {
             hideControlsTask?.cancel()
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
             OrientationLockCoordinator.setPlayerFullscreen(false)
             hideParentTabBar(false)
         }
