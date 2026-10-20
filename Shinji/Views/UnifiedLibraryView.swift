@@ -1,6 +1,13 @@
 import SwiftUI
 
+enum MediaLibraryKind: Equatable {
+    case movies
+    case tvShows
+}
+
 struct UnifiedLibraryView: View {
+    let kind: MediaLibraryKind
+
     @EnvironmentObject private var addonStore: AddonStore
     @State private var searchText = ""
     @State private var isSearchPresented = false
@@ -14,12 +21,22 @@ struct UnifiedLibraryView: View {
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
     @AppStorage("shinjiGlowHex") private var glowHex = "4936FF"
 
+    init(kind: MediaLibraryKind = .movies) {
+        self.kind = kind
+    }
+
     private let filters = ["For You", "Popular", "Recently Added", "Action", "Drama"]
     private let genres = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Fantasy", "Horror", "Romance", "Sci-Fi", "Thriller"]
 
     private var libraryItems: [AddonCatalogItem] {
         addonStore.catalogItems.filter { item in
-            ["movie", "series"].contains(item.type.lowercased())
+            let type = item.type.lowercased()
+            switch kind {
+            case .movies:
+                return type == "movie"
+            case .tvShows:
+                return type == "series"
+            }
         }
     }
 
@@ -70,10 +87,15 @@ struct UnifiedLibraryView: View {
                     filterBar
                     genreBar
                     featuredSection
-                    shelfSection("Recently Added Movies", items: movieItems)
-                    shelfSection("Recently Added Shows", items: showItems)
+                    if kind == .movies {
+                        shelfSection("Recently Added Movies", items: movieItems)
+                        shelfSection("Popular Movies", items: Array(movieItems.prefix(24)))
+                    } else {
+                        shelfSection("Recently Added TV Shows", items: showItems)
+                        shelfSection("Popular TV Shows", items: Array(showItems.prefix(24)))
+                    }
                     if selectedFilter == "For You" {
-                        shelfSection("More Movies & Shows", items: filteredItems)
+                        shelfSection(kind == .movies ? "More Movies" : "More TV Shows", items: filteredItems)
                     }
                     footer
                 }
@@ -111,10 +133,10 @@ struct UnifiedLibraryView: View {
                         .tracking(3.5)
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                Text("Movies & TV")
+                Text(kind == .movies ? "Movies" : "TV Shows")
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                Text("Movies and shows in one place")
+                Text(kind == .movies ? "Movies, organized your way" : "TV shows, organized your way")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.55))
             }
@@ -149,7 +171,7 @@ struct UnifiedLibraryView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Color(hex: accentHex))
-            TextField("Search movies and shows", text: $searchText)
+            TextField(kind == .movies ? "Search movies" : "Search TV shows", text: $searchText)
                 .font(.system(size: 15))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -494,7 +516,7 @@ struct UnifiedLibraryView: View {
     }
 
     private func matches(_ item: AddonCatalogItem, genre: String) -> Bool {
-        let text = "\(item.name) \(item.description ?? "")"
+        let text = "\(item.name) \(item.description ?? \"\")"
         return text.localizedCaseInsensitiveContains(genre)
     }
 
