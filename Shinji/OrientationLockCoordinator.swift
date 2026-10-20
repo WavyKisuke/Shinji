@@ -25,6 +25,8 @@ final class OrientationLockCoordinator {
 
     private(set) var supportedOrientations: UIInterfaceOrientationMask = .portrait
     private var observers: [NSObjectProtocol] = []
+    private var playerIsActive = false
+    private var playerWantsLandscape = false
 
     private init() {}
 
@@ -34,14 +36,38 @@ final class OrientationLockCoordinator {
         let center = NotificationCenter.default
         observers.append(
             center.addObserver(forName: lockPlayerToLandscapeNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.playerIsActive = true
+                self?.playerWantsLandscape = true
                 self?.setPlayerOrientation(landscape: true)
             }
         )
         observers.append(
             center.addObserver(forName: unlockPlayerOrientationNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.playerIsActive = false
+                self?.playerWantsLandscape = false
                 self?.setPlayerOrientation(landscape: false)
             }
         )
+        observers.append(
+            center.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                guard let self, self.playerIsActive else { return }
+                switch UIDevice.current.orientation {
+                case .landscapeLeft, .landscapeRight:
+                    if !self.playerWantsLandscape {
+                        self.playerWantsLandscape = true
+                        self.setPlayerOrientation(landscape: true)
+                    }
+                case .portrait, .portraitUpsideDown:
+                    if self.playerWantsLandscape {
+                        self.playerWantsLandscape = false
+                        self.setPlayerOrientation(landscape: false)
+                    }
+                default:
+                    break
+                }
+            }
+        )
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
     }
 
     static func setPlayerFullscreen(_ enabled: Bool) {
@@ -58,9 +84,6 @@ final class OrientationLockCoordinator {
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }) else { return }
 
-        // Tell the current root controller about the new mask before requesting
-        // the geometry change. This is important on iOS 16+ when the app starts
-        // with portrait-only support.
         windowScene.windows.forEach { $0.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations() }
 
         if #available(iOS 16.0, *) {
@@ -70,17 +93,11 @@ final class OrientationLockCoordinator {
                     print("[OrientationLockCoordinator] Geometry update failed: \(error.localizedDescription)")
                 }
             }
-
-            // Some iOS/device combinations need an explicit rotation request as
-            // well as the scene geometry update to immediately honor the change.
-            let orientation: UIInterfaceOrientation = landscape ? preferredLandscapeOrientation : .portrait
-            UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
-            UIViewController.attemptRotationToDeviceOrientation()
-        } else {
-            let orientation: UIInterfaceOrientation = landscape ? preferredLandscapeOrientation : .portrait
-            UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
-            UIViewController.attemptRotationToDeviceOrientation()
         }
+
+        let orientation: UIInterfaceOrientation = landscape ? preferredLandscapeOrientation : .portrait
+        UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
+        UIViewController.attemptRotationToDeviceOrientation()
     }
 
     private var preferredLandscapeOrientation: UIInterfaceOrientation {
