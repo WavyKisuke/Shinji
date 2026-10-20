@@ -1,0 +1,40 @@
+name: Build player fix
+
+on:
+  push:
+    branches:
+      - fix/player-black-screen
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build unsigned IPA
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Shinji.xcodeproj \
+            -scheme Shinji \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/Shinji.app"
+          test -d "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/Shinji.app"
+          cd "$RUNNER_TEMP"
+          /usr/bin/zip -qry "$GITHUB_WORKSPACE/Shinji-unsigned.ipa" Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shinji-player-fix-unsigned-ipa
+          path: Shinji-unsigned.ipa
+          retention-days: 14
