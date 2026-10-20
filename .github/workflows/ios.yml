@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 45
     steps:
       - name: Check out source
@@ -37,13 +37,6 @@ jobs:
 
       - name: Apply library performance optimizations
         run: python3 Scripts/optimize_library_build.py
-
-      - name: Prepare MPVKit submodule
-        run: |
-          set -euo pipefail
-          if [ -d MPVKit ]; then
-            git submodule update --init --recursive MPVKit || true
-          fi
 
       - name: Generate Xcode project
         run: xcodegen generate
