@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CatalogItemDetailView: View {
     let item: AddonCatalogItem
-    @Environment(\ .dismiss) private var dismiss
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var addonStore: AddonStore
     @StateObject private var watchlistStore = WatchlistStore.shared
     @State private var isLoading = false
