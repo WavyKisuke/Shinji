@@ -25,29 +25,20 @@ struct PlayerView: View {
     var body: some View {
         GeometryReader { _ in
             ZStack {
-                Color.black.ignoresSafeArea()
+                // Keep the tap-to-show/hide gesture behind the actual controls.
+                // A transparent sibling above the player can steal touches from
+                // SwiftUI Buttons/Slider even when those views have a higher zIndex.
+                Color.black
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        toggleControls()
+                    }
+                    .zIndex(-2)
 
                 playerSurface()
                     .zIndex(0)
                     .allowsHitTesting(false)
-
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        guard playbackError == nil else { return }
-                        if controlsLocked {
-                            controlsLocked = false
-                            showControls = true
-                            scheduleHide()
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                showControls.toggle()
-                            }
-                            if showControls { scheduleHide() } else { hideControlsTask?.cancel() }
-                        }
-                    }
-                    .zIndex(1)
-                    .allowsHitTesting(playbackError == nil)
 
                 if showControls {
                     controlsOverlay()
@@ -124,6 +115,25 @@ struct PlayerView: View {
             UIDevice.current.endGeneratingDeviceOrientationNotifications()
             OrientationLockCoordinator.setPlayerFullscreen(false)
             hideParentTabBar(false)
+        }
+    }
+
+    private func toggleControls() {
+        guard playbackError == nil else { return }
+        if controlsLocked {
+            controlsLocked = false
+            showControls = true
+            scheduleHide()
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.18)) {
+            showControls.toggle()
+        }
+        if showControls {
+            scheduleHide()
+        } else {
+            hideControlsTask?.cancel()
         }
     }
 
@@ -214,6 +224,7 @@ struct PlayerView: View {
 
             Button {
                 controlsLocked = true
+                showControls = true
                 hideControlsTask?.cancel()
             } label: {
                 Image(systemName: "lock.fill")
@@ -233,7 +244,6 @@ struct PlayerView: View {
             seekButton(seconds: -10)
             Button {
                 sendCommand("cycle pause")
-                isPlaying.toggle()
                 scheduleHide()
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
@@ -264,15 +274,23 @@ struct PlayerView: View {
                     in: 0...max(duration, 1)
                 )
                 .tint(.white)
+                .contentShape(Rectangle())
                 Text(formatTime(duration)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
             }
 
             HStack(spacing: 22) {
-                bottomButton("waveform", "Audio") { }
-                bottomButton("captions.bubble", "Subtitles") { }
+                bottomButton("waveform", "Audio") {
+                    sendCommand("cycle audio")
+                    scheduleHide()
+                }
+                bottomButton("captions.bubble", "Subtitles") {
+                    sendCommand("cycle sub")
+                    scheduleHide()
+                }
                 bottomButton(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", isMuted ? "Unmute" : "Mute") {
-                    isMuted.toggle()
-                    sendCommand("set mute \(isMuted ? "yes" : "no")")
+                    let nextMuted = !isMuted
+                    isMuted = nextMuted
+                    sendCommand("set mute \(nextMuted ? "yes" : "no")")
                     scheduleHide()
                 }
                 bottomButton("gearshape", "Settings") { showSettings = true }
@@ -297,13 +315,17 @@ struct PlayerView: View {
             }
             .frame(width: 54, height: 54)
             .background(.black.opacity(0.3), in: Circle())
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
     }
 
     private func bottomButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 17, weight: .medium)).frame(width: 32, height: 32)
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .medium))
+                .frame(width: 42, height: 42)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
