@@ -1,44 +1,66 @@
 from pathlib import Path
 
 
-def ensure_block(text: str, marker: str, block: str) -> str:
-    if marker in text:
-        return text
-    return text + "\n\n" + block
+# CI source repair for known generated/escaped Swift fragments. Keep this
+# idempotent so repeated builds always converge to compilable source.
 
+unified = Path("Shinji/Views/UnifiedLibraryView.swift")
+text = unified.read_text(encoding="utf-8")
 
-path = Path("Shinji/Views/UnifiedLibraryView.swift")
-text = path.read_text(encoding="utf-8")
+text = text.replace(
+    '        let text = "\\(item.name) \\(item.description ?? \\\"\\\")"',
+    '        let text = item.name + " " + (item.description ?? "")',
+)
 
-# Keep the library view consistent and idempotent for CI builds. This script is
-# intentionally conservative: it only inserts the missing section helpers if they
-# are absent and avoids patching arbitrary source text.
-anchor = '''    private var showItems: [AddonCatalogItem] {
-        filteredItems.filter { $0.type.lowercased() == "series" }
+# The "For You" branch used to render the same More shelf a second time.
+duplicate_more = '''                    if selectedFilter == "For You" {
+                        shelfSection(kind == .movies ? "More Movies" : "More TV Shows", items: moreItems)
+                    }
+'''
+text = text.replace(duplicate_more, "", 1)
+unified.write_text(text, encoding="utf-8")
+
+mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
+mpv_text = mpv.read_text(encoding="utf-8")
+
+old_execute = '''    private func execute(_ arguments: [String], on handle: OpaquePointer) {
+        var cargs: [UnsafeMutablePointer<CChar>?] = arguments.map { strdup($0) }
+        cargs.append(nil)
+        defer {
+            for pointer in cargs where pointer != nil {
+                free(pointer)
+            }
+        }
+
+        let result = cargs.withUnsafeMutableBufferPointer { buffer in
+            mpv_command(handle, buffer.baseAddress)
+        }
+        if result < 0 {
+            publishError("MPV command failed: \\(String(cString: mpv_error_string(result)))")
+        }
     }
 '''
-insert = '''    private var showItems: [AddonCatalogItem] {
-        filteredItems.filter { $0.type.lowercased() == "series" }
-    }
+new_execute = '''    private func execute(_ arguments: [String], on handle: OpaquePointer) {
+        var owned: [UnsafeMutablePointer<CChar>] = arguments.map { strdup($0) }
+        defer {
+            for pointer in owned {
+                free(pointer)
+            }
+        }
 
-    private var featuredItems: [AddonCatalogItem] {
-        Array(filteredItems.prefix(8))
-    }
+        var cargs: [UnsafePointer<CChar>?] = owned.map { UnsafePointer($0) }
+        cargs.append(nil)
 
-    private var remainingItems: [AddonCatalogItem] {
-        Array(filteredItems.dropFirst(featuredItems.count))
-    }
-
-    private var recentItems: [AddonCatalogItem] {
-        Array(remainingItems.prefix(12))
-    }
-
-    private var moreItems: [AddonCatalogItem] {
-        Array(remainingItems.dropFirst(recentItems.count).prefix(12))
+        let result = cargs.withUnsafeBufferPointer { buffer in
+            mpv_command(handle, buffer.baseAddress)
+        }
+        if result < 0 {
+            publishError("MPV command failed: \\(String(cString: mpv_error_string(result)))")
+        }
     }
 '''
-if anchor in text and "private var featuredItems" not in text:
-    text = text.replace(anchor, insert, 1)
+if old_execute in mpv_text:
+    mpv_text = mpv_text.replace(old_execute, new_execute, 1)
+mpv.write_text(mpv_text, encoding="utf-8")
 
-path.write_text(text, encoding="utf-8")
-print("UnifiedLibraryView scaffolding is in a valid state.")
+print("CI source repairs applied.")
