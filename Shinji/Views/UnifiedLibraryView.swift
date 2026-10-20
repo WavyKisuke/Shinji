@@ -10,8 +10,10 @@ struct UnifiedLibraryView: View {
     @StateObject private var watchlistStore = WatchlistStore.shared
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
 
-    private var savedMovies: [WatchlistItem] {
-        watchlistStore.items.filter { $0.type.lowercased() == "movie" }
+    private var savedItems: [WatchlistItem] {
+        watchlistStore.items.filter {
+            kind == .movies ? $0.type.lowercased() == "movie" : ["series", "tv", "tvshow", "tv shows"].contains($0.type.lowercased())
+        }
     }
 
     var body: some View {
@@ -19,11 +21,7 @@ struct UnifiedLibraryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     header
-                    if savedMovies.isEmpty {
-                        emptyState
-                    } else {
-                        movieGrid
-                    }
+                    if savedItems.isEmpty { emptyState } else { itemGrid }
                 }
                 .padding(.top, 10)
                 .padding(.horizontal, 18)
@@ -40,7 +38,7 @@ struct UnifiedLibraryView: View {
             Text("Library")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
-            Text("Movies you picked or favorited")
+            Text(kind == .movies ? "Movies you picked or favorited" : "Shows you picked or favorited")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.55))
         }
@@ -49,19 +47,16 @@ struct UnifiedLibraryView: View {
     private var emptyState: some View {
         VStack(spacing: 18) {
             ZStack {
-                Circle()
-                    .fill(Color(hex: accentHex).opacity(0.12))
-                    .frame(width: 74, height: 74)
-                Image(systemName: "film.stack")
+                Circle().fill(Color(hex: accentHex).opacity(0.12)).frame(width: 74, height: 74)
+                Image(systemName: kind == .movies ? "film.stack" : "tv")
                     .font(.system(size: 29, weight: .medium))
                     .foregroundStyle(Color(hex: accentHex))
             }
-
             VStack(spacing: 7) {
-                Text("Your library is empty")
+                Text(kind == .movies ? "No movies saved" : "No shows saved")
                     .font(.system(size: 21, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                Text("Movies you pick or favorite will appear here. Browse Home or Search and save a movie to build your library.")
+                Text("Open a movie or show and tap Add to Library. It will appear here immediately.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.52))
                     .multilineTextAlignment(.center)
@@ -73,68 +68,85 @@ struct UnifiedLibraryView: View {
         .padding(.horizontal, 28)
         .padding(.vertical, 54)
         .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        .overlay { RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.08), lineWidth: 1) }
+    }
+
+    private var itemGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 18) {
+            ForEach(savedItems) { item in savedItemCard(item) }
         }
     }
 
-    private var movieGrid: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12)
-        ], spacing: 18) {
-            ForEach(savedMovies) { item in
-                savedMovieCard(item)
-            }
-        }
-    }
-
-    private func savedMovieCard(_ item: WatchlistItem) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(0.07))
-                    .aspectRatio(0.67, contentMode: .fit)
-
-                if let string = item.posterURL, let url = URL(string: string) {
-                    AsyncImage(url: url) { phase in
-                        if case .success(let image) = phase {
-                            image.resizable().scaledToFill()
-                        } else {
-                            posterPlaceholder
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                } else {
-                    posterPlaceholder
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    private func savedItemCard(_ item: WatchlistItem) -> some View {
+        NavigationLink {
+            SavedLibraryItemView(item: item)
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                ZStack(alignment: .topTrailing) {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                        .aspectRatio(0.67, contentMode: .fit)
+                    if let string = item.posterURL, let url = URL(string: string) {
+                        AsyncImage(url: url) { phase in
+                            if case .success(let image) = phase { image.resizable().scaledToFill() } else { posterPlaceholder }
+                        }.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    } else { posterPlaceholder.clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous)) }
+                    Image(systemName: "bookmark.fill")
+                        .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                        .padding(8).background(.black.opacity(0.62), in: Circle()).padding(7)
                 }
-
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(8)
-                    .background(.black.opacity(0.62), in: Circle())
-                    .padding(7)
+                Text(item.title).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            Text(item.title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) { watchlistStore.remove(item) } label: { Label("Remove from Library", systemImage: "trash") }
         }
     }
 
     private var posterPlaceholder: some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.06))
-            .overlay {
-                Image(systemName: "film")
-                    .font(.system(size: 25, weight: .light))
-                    .foregroundStyle(.white.opacity(0.35))
-            }
+        Rectangle().fill(Color.white.opacity(0.06)).overlay { Image(systemName: kind == .movies ? "film" : "tv").font(.system(size: 25, weight: .light)).foregroundStyle(.white.opacity(0.35)) }
+    }
+}
+
+private struct SavedLibraryItemView: View {
+    let item: WatchlistItem
+    @StateObject private var watchlistStore = WatchlistStore.shared
+    @StateObject private var addonStore = AddonStore.shared
+    @State private var selectedStream: AddonStreamOption?
+    @State private var showPlayer = false
+    @State private var loading = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                if let raw = item.posterURL, let url = URL(string: raw) {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let image) = phase { image.resizable().scaledToFill() } else { Color.white.opacity(0.08) }
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 430).clipShape(RoundedRectangle(cornerRadius: 22))
+                }
+                Text(item.title).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                if let description = item.description, !description.isEmpty { Text(description).foregroundStyle(.white.opacity(0.72)) }
+                HStack(spacing: 12) {
+                    Button { watchlistStore.remove(item) } label: { Label("Remove", systemImage: "bookmark.slash").frame(maxWidth: .infinity) }.buttonStyle(.bordered)
+                    Button { Task { await play() } } label: { Label(loading ? "Finding…" : "Play", systemImage: "play.fill").frame(maxWidth: .infinity) }.buttonStyle(.borderedProminent).disabled(loading)
+                }
+            }.padding(20)
+        }
+        .background(Color.black.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+        .fullScreenCover(isPresented: $showPlayer) {
+            if let stream = selectedStream { PlayerView(url: stream.url, title: item.title, headers: stream.headers, posterURL: item.posterURL.flatMap(URL.init(string:))) }
+        }
+    }
+
+    private func play() async {
+        loading = true
+        let catalog = AddonCatalogItem(id: item.catalogID, type: item.type, name: item.title, posterURL: item.posterURL.flatMap(URL.init(string:)), year: nil, description: item.description, genres: [], addonName: item.addonName)
+        await addonStore.loadStreams(for: catalog)
+        selectedStream = addonStore.streamOptions.first
+        showPlayer = selectedStream != nil
+        loading = false
     }
 }
