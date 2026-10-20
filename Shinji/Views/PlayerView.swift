@@ -24,8 +24,16 @@ struct PlayerView: View {
     var body: some View {
         GeometryReader { _ in
             ZStack {
-                Color.black.ignoresSafeArea().contentShape(Rectangle()).onTapGesture { seekForwardFromVideoTap() }.zIndex(-2)
+                Color.black.ignoresSafeArea().zIndex(-2)
                 playerSurface().zIndex(0).allowsHitTesting(false)
+
+                // Dedicated video tap surface. It sits below the controls so buttons keep their hit targets.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { handleVideoTap() }
+                    .zIndex(1)
+                    .allowsHitTesting(!controlsLocked)
+
                 if showControls { controlsOverlay().zIndex(10).allowsHitTesting(true) }
                 if controlsLocked {
                     Button { controlsLocked = false; showControls = true; scheduleHide() } label: {
@@ -48,10 +56,16 @@ struct PlayerView: View {
         .onDisappear { hideControlsTask?.cancel(); UIDevice.current.endGeneratingDeviceOrientationNotifications(); OrientationLockCoordinator.setPlayerFullscreen(false); hideParentTabBar(false) }
     }
 
-    private func seekForwardFromVideoTap() {
+    private func handleVideoTap() {
         guard playbackError == nil, !controlsLocked else { return }
-        sendSeek(seconds: 10)
-        scheduleHide()
+        if showControls {
+            hideControlsTask?.cancel()
+            withAnimation(.easeInOut(duration: 0.18)) { showControls = false }
+        } else {
+            sendSeek(seconds: 10)
+            showControls = true
+            scheduleHide()
+        }
     }
 
     private func sendSeek(seconds: Int) {
