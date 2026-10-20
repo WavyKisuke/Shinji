@@ -11,8 +11,7 @@ text = text.replace(
     'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])'
 )
 
-# Add a dedicated playback-speed control once, while keeping this build repair
-# script idempotent across repeated CI runs.
+# Dedicated playback-speed sheet/button, inserted once and safe on repeated CI runs.
 if 'showPlaybackSpeed' not in text:
     text = text.replace(
         '    @State private var showSettings = false\n',
