@@ -15,6 +15,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MPVMetalView {
         let view = MPVMetalView()
+        view.isUserInteractionEnabled = false
         context.coordinator.attach(view: view, url: url, headers: headers, muted: muted)
         context.coordinator.onStatus = onStatus
         context.coordinator.onError = onError
@@ -23,6 +24,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: MPVMetalView, context: Context) {
+        uiView.isUserInteractionEnabled = false
         context.coordinator.onStatus = onStatus
         context.coordinator.onError = onError
         context.coordinator.onPlaybackUpdate = onPlaybackUpdate
@@ -50,10 +52,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
 
         func attach(view: MPVMetalView, url: URL, headers: [String: String], muted: Bool) {
             stateLock.lock()
-            guard !started else {
-                stateLock.unlock()
-                return
-            }
+            guard !started else { stateLock.unlock(); return }
             started = true
             isShuttingDown = false
             stateLock.unlock()
@@ -88,9 +87,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
             guard initResult >= 0 else {
                 let message = String(cString: mpv_error_string(initResult))
                 DispatchQueue.main.async { self.onError?("MPV initialization failed: \(message)") }
-                stateLock.lock()
-                mpv = nil
-                stateLock.unlock()
+                stateLock.lock(); mpv = nil; stateLock.unlock()
                 mpv_terminate_destroy(handle)
                 return
             }
@@ -110,9 +107,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
 
             view.setNeedsLayout()
             view.layoutIfNeeded()
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.readEvents(handle: handle)
-            }
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in self?.readEvents(handle: handle) }
         }
 
         func handleCommand(commandID: Int, command: String?) {
@@ -120,7 +115,6 @@ struct MPVPlayerSurface: UIViewRepresentable {
             let shouldSend = commandID != lastCommandID && !isShuttingDown
             if shouldSend { lastCommandID = commandID }
             stateLock.unlock()
-
             guard shouldSend, let command, !command.isEmpty else { return }
             issue(command.split(separator: " ").map(String.init))
         }
@@ -131,20 +125,11 @@ struct MPVPlayerSurface: UIViewRepresentable {
                 return UnsafePointer(pointer)
             }
             pointers.append(nil)
-            defer {
-                for pointer in pointers {
-                    if let pointer { free(UnsafeMutablePointer(mutating: pointer)) }
-                }
-            }
+            defer { for pointer in pointers { if let pointer { free(UnsafeMutablePointer(mutating: pointer)) } } }
 
             stateLock.lock()
-            guard let handle = mpv, !isShuttingDown else {
-                stateLock.unlock()
-                return
-            }
-            let result = pointers.withUnsafeMutableBufferPointer { buffer in
-                mpv_command(handle, buffer.baseAddress)
-            }
+            guard let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
+            let result = pointers.withUnsafeMutableBufferPointer { buffer in mpv_command(handle, buffer.baseAddress) }
             stateLock.unlock()
 
             if result < 0 {
@@ -154,16 +139,11 @@ struct MPVPlayerSurface: UIViewRepresentable {
         }
 
         private func applyRequestHeaders(_ headers: [String: String], to handle: OpaquePointer) {
-            let safeHeaders = headers.filter {
-                !$0.key.contains("\r") && !$0.key.contains("\n") &&
-                !$0.value.contains("\r") && !$0.value.contains("\n")
-            }
+            let safeHeaders = headers.filter { !$0.key.contains("\r") && !$0.key.contains("\n") && !$0.value.contains("\r") && !$0.value.contains("\n") }
             let fields = safeHeaders
                 .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
                 .map { key, value in
-                    let escapedValue = value
-                        .replacingOccurrences(of: "\\", with: "\\\\")
-                        .replacingOccurrences(of: ",", with: "\\,")
+                    let escapedValue = value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ",", with: "\\,")
                     return "\(key): \(escapedValue)"
                 }
                 .joined(separator: ",")
@@ -172,10 +152,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
 
         func setMuted(_ muted: Bool) {
             stateLock.lock()
-            guard let handle = mpv, !isShuttingDown else {
-                stateLock.unlock()
-                return
-            }
+            guard let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
             var value: Int32 = muted ? 1 : 0
             _ = mpv_set_property(handle, "mute", MPV_FORMAT_FLAG, &value)
             stateLock.unlock()
@@ -183,37 +160,23 @@ struct MPVPlayerSurface: UIViewRepresentable {
 
         private func readEvents(handle: OpaquePointer) {
             while true {
-                stateLock.lock()
-                let shuttingDown = isShuttingDown
-                stateLock.unlock()
-                if shuttingDown {
-                    mpv_terminate_destroy(handle)
-                    return
-                }
+                stateLock.lock(); let shuttingDown = isShuttingDown; stateLock.unlock()
+                if shuttingDown { mpv_terminate_destroy(handle); return }
 
                 guard let event = mpv_wait_event(handle, 0.25) else { continue }
 
-                stateLock.lock()
-                let shouldStop = isShuttingDown
-                stateLock.unlock()
-                if shouldStop {
-                    mpv_terminate_destroy(handle)
-                    return
-                }
+                stateLock.lock(); let shouldStop = isShuttingDown; stateLock.unlock()
+                if shouldStop { mpv_terminate_destroy(handle); return }
 
                 if event.pointee.event_id == MPV_EVENT_NONE {
                     publishPlaybackState(handle)
                     continue
                 }
-                if event.pointee.event_id == MPV_EVENT_SHUTDOWN {
-                    mpv_terminate_destroy(handle)
-                    return
-                }
+                if event.pointee.event_id == MPV_EVENT_SHUTDOWN { mpv_terminate_destroy(handle); return }
                 if event.pointee.event_id == MPV_EVENT_FILE_LOADED {
                     DispatchQueue.main.async { self.onStatus?("Stream loaded by MPV") }
                 } else if event.pointee.event_id == MPV_EVENT_END_FILE {
-                    if let data = event.pointee.data?.assumingMemoryBound(to: mpv_event_end_file.self).pointee,
-                       data.error < 0 {
+                    if let data = event.pointee.data?.assumingMemoryBound(to: mpv_event_end_file.self).pointee, data.error < 0 {
                         let message = String(cString: mpv_error_string(data.error))
                         DispatchQueue.main.async { self.onError?("MPV couldn't play this stream: \(message)") }
                     }
@@ -230,24 +193,16 @@ struct MPVPlayerSurface: UIViewRepresentable {
             _ = mpv_get_property(handle, "duration", MPV_FORMAT_DOUBLE, &duration)
             _ = mpv_get_property(handle, "pause", MPV_FORMAT_FLAG, &paused)
             guard time.isFinite, duration.isFinite else { return }
-            DispatchQueue.main.async {
-                self.onPlaybackUpdate?(max(0, time), max(0, duration), paused != 0)
-            }
+            DispatchQueue.main.async { self.onPlaybackUpdate?(max(0, time), max(0, duration), paused != 0) }
         }
 
         func shutdown() {
             stateLock.lock()
-            guard let handle = mpv, !isShuttingDown else {
-                stateLock.unlock()
-                return
-            }
+            guard let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
             isShuttingDown = true
             mpv = nil
             stateLock.unlock()
-
             surface?.onReadyForPlayback = nil
-            // Never destroy mpv while the event thread may still be inside
-            // mpv_wait_event(). Wake that thread and let it perform destruction.
             mpv_wakeup(handle)
         }
     }
@@ -256,21 +211,14 @@ struct MPVPlayerSurface: UIViewRepresentable {
 final class MPVMetalLayer: CAMetalLayer {
     override var drawableSize: CGSize {
         get { super.drawableSize }
-        set {
-            if Int(newValue.width) > 1 && Int(newValue.height) > 1 {
-                super.drawableSize = newValue
-            }
-        }
+        set { if Int(newValue.width) > 1 && Int(newValue.height) > 1 { super.drawableSize = newValue } }
     }
 
     override var wantsExtendedDynamicRangeContent: Bool {
         get { super.wantsExtendedDynamicRangeContent }
         set {
-            if Thread.isMainThread {
-                super.wantsExtendedDynamicRangeContent = newValue
-            } else {
-                DispatchQueue.main.sync { super.wantsExtendedDynamicRangeContent = newValue }
-            }
+            if Thread.isMainThread { super.wantsExtendedDynamicRangeContent = newValue }
+            else { DispatchQueue.main.sync { super.wantsExtendedDynamicRangeContent = newValue } }
         }
     }
 }
@@ -289,9 +237,7 @@ final class MPVMetalView: UIView {
             width: (bounds.width * scale).rounded(.toNearestOrAwayFromZero),
             height: (bounds.height * scale).rounded(.toNearestOrAwayFromZero)
         )
-        if size.width > 1, size.height > 1, metalLayer.drawableSize != size {
-            metalLayer.drawableSize = size
-        }
+        if size.width > 1, size.height > 1, metalLayer.drawableSize != size { metalLayer.drawableSize = size }
         if !didSignalReadyForPlayback, window != nil, bounds.width > 1, bounds.height > 1 {
             didSignalReadyForPlayback = true
             onReadyForPlayback?()
@@ -301,6 +247,7 @@ final class MPVMetalView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .black
+        isUserInteractionEnabled = false
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         metalLayer.contentsScale = UIScreen.main.nativeScale
@@ -310,6 +257,7 @@ final class MPVMetalView: UIView {
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         backgroundColor = .black
+        isUserInteractionEnabled = false
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         metalLayer.contentsScale = UIScreen.main.nativeScale
