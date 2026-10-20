@@ -31,6 +31,9 @@ jobs:
       - name: Repair player controls
         run: python3 Scripts/fix_player_controls.py
 
+      - name: Fix floating tab bar covering player controls
+        run: python3 Scripts/fix_player_tabbar.py
+
       - name: Apply Nuvio-style player behavior
         run: python3 Scripts/fix_nuvio_player.py
 
