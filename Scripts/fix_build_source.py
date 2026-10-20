@@ -68,6 +68,11 @@ new_execute = '''    private func execute(_ arguments: [String], on handle: Opaq
 '''
 if old_execute in mpv_text:
     mpv_text = mpv_text.replace(old_execute, new_execute, 1)
+
+# Use MPV's canonical track-selection properties. The old aliases can be
+# unreliable with some Libmpv builds, especially for HLS alternate tracks.
+mpv_text = mpv_text.replace('["cycle", "audio"]', '["cycle", "aid"]')
+mpv_text = mpv_text.replace('["cycle", "sub"]', '["cycle", "sid"]')
 mpv.write_text(mpv_text, encoding="utf-8")
 
 # Automatically populate Keep Watching from every MPV playback session.
