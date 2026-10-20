@@ -4,17 +4,36 @@ on:
   push:
     branches:
       - fix/player-black-screen
+  workflow_dispatch:
+
+concurrency:
+  group: shinji-player-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - run: xcodebuild -version
-      - run: brew install xcodegen
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify runner
+        run: |
+          set -euo pipefail
+          echo "Runner: $(uname -a)"
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
       - name: Apply library performance optimizations
         run: python3 Scripts/optimize_library_build.py
-      - run: xcodegen generate
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
       - name: Build unsigned IPA
         run: |
           set -euo pipefail
@@ -29,16 +48,22 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
+
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/Shinji.app"
           test -d "$APP_PATH"
           mkdir -p "$RUNNER_TEMP/Payload"
           cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/Shinji.app"
           cd "$RUNNER_TEMP"
           /usr/bin/zip -qry "$GITHUB_WORKSPACE/Shinji-unsigned.ipa" Payload
-      - uses: actions/upload-artifact@v4
+          test -f "$GITHUB_WORKSPACE/Shinji-unsigned.ipa"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
         with:
           name: Shinji-player-fix-unsigned-ipa
           path: Shinji-unsigned.ipa
+          if-no-files-found: error
           retention-days: 14
+
       - name: Build complete
         run: echo "Shinji IPA build completed successfully"
