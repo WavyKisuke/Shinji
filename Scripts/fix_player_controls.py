@@ -6,6 +6,8 @@ text = text.replace('["cycle", "aid"]', '["cycle", "audio"]')
 text = text.replace('["cycle", "sid"]', '["cycle", "sub"]')
 text = text.replace('sendCommand(["cycle", "pause"])', 'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])')
 
+# Keep playback speed as one dedicated player control. Older versions exposed
+# speed choices inside Player Settings as well, which resulted in two speed UIs.
 if 'showPlaybackSpeed' not in text:
     text = text.replace('    @State private var showSettings = false\n', '    @State private var showSettings = false\n    @State private var showPlaybackSpeed = false\n', 1)
     text = text.replace('        .sheet(isPresented: $showSettings) {\n', '''        .sheet(isPresented: $showPlaybackSpeed) {
@@ -47,6 +49,26 @@ private struct PlaybackSpeedSheet: View {
 '''
     if marker in text:
         text = text.replace(marker, speed_sheet + 'private struct PlayerSettingsSheet: View {', 1)
+
+# Remove the old duplicate speed controls from Player Settings if they exist.
+start = '                Section("Playback") {'
+while start in text:
+    begin = text.find(start)
+    brace = text.find('{', begin)
+    depth = 0
+    end = None
+    for i in range(brace, len(text)):
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end is None:
+        break
+    text = text[:begin] + text[end:]
+
 player.write_text(text, encoding="utf-8")
 
 mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
@@ -87,4 +109,4 @@ if old in mpv_text:
     mpv_text = mpv_text.replace(old, new, 1)
 mpv_text = mpv_text.replace('["cycle", "aid"]', '["cycle", "audio"]')
 mpv_text = mpv_text.replace('["cycle", "sid"]', '["cycle", "sub"]')
-mpv.write_text(mpv_text, encoding="utf-8")
+mpv.write_text(mpv_text, encoding="utf-8')
