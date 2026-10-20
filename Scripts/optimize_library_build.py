@@ -1,46 +1,72 @@
 from pathlib import Path
 
+
+def replace_once(text: str, old: str, new: str) -> str:
+    if not old:
+        return text
+    if old not in text:
+        return text
+    return text.replace(old, new, 1)
+
+
+def ensure_block(text: str, marker: str, block: str) -> str:
+    if marker in text:
+        return text
+    return text + "\n\n" + block
+
+
+# UnifiedLibraryView.swift
 path = Path("Shinji/Views/UnifiedLibraryView.swift")
 s = path.read_text(encoding="utf-8")
 
-replacements = {
-    'import SwiftUI\n':
-        'import SwiftUI\nimport UIKit\nimport ImageIO\n',
-    'struct UnifiedLibraryView: View {':
-        '''enum MediaLibraryKind: Equatable {\n    case movies\n    case tvShows\n}\n\nstruct UnifiedLibraryView: View {\n    let kind: MediaLibraryKind\n''',
-    'private let filters = ["For You", "Popular", "Recently Added", "Action", "Drama"]':
-        'private let filters = ["For You", "Popular", "Recently Added"]',
-    '''        addonStore.catalogItems.filter { item in\n            ["movie", "series"].contains(item.type.lowercased())\n        }''':
-        '''        addonStore.catalogItems.filter { item in\n            let type = item.type.lowercased()\n            switch kind {\n            case .movies:\n                return type == "movie"\n            case .tvShows:\n                return type == "series"\n            }\n        }''',
-    '''                    featuredSection\n                    shelfSection("Recently Added Movies", items: movieItems)\n                    shelfSection("Recently Added Shows", items: showItems)\n                    if selectedFilter == "For You" {\n                        shelfSection("More Movies & Shows", items: filteredItems)\n                    }''':
-        '''                    if kind == .movies {\n                        shelfSection("Featured Movies", items: Array(movieItems.prefix(12)))\n                        shelfSection("Recently Added Movies", items: Array(movieItems.prefix(24)))\n                        shelfSection("Popular Movies", items: Array(movieItems.prefix(24)))\n                    } else {\n                        shelfSection("Featured TV Shows", items: Array(showItems.prefix(12)))\n                        shelfSection("Recently Added TV Shows", items: Array(showItems.prefix(24)))\n                        shelfSection("Popular TV Shows", items: Array(showItems.prefix(24)))\n                    }''',
-    'Text("Movies & TV")':
-        'Text(kind == .movies ? "Movies" : "TV Shows")',
-    'Text("Movies and shows in one place")':
-        'Text(kind == .movies ? "Movies, organized your way" : "TV shows, organized your way")',
-    'TextField("Search movies and shows", text: $searchText)':
-        'TextField(kind == .movies ? "Search movies" : "Search TV shows", text: $searchText)',
-    'ForEach(items) { item in':
-        'ForEach(Array(items.prefix(24))) { item in',
+s = replace_once(s, 'import SwiftUI\n', 'import SwiftUI\nimport UIKit\nimport ImageIO\n')
+
+if 'enum MediaLibraryKind: Equatable {' not in s and 'struct UnifiedLibraryView: View {' in s:
+    s = replace_once(
+        s,
+        'struct UnifiedLibraryView: View {',
+        '''enum MediaLibraryKind: Equatable {
+    case movies
+    case tvShows
 }
 
-for old, new in replacements.items():
-    if old in s:
-        s = s.replace(old, new, 1)
+struct UnifiedLibraryView: View {
+    let kind: MediaLibraryKind
+''',
+    )
 
-old_poster = '''                    if let url = item.posterURL {\n                        AsyncImage(url: url) { phase in\n                            switch phase {\n                            case .success(let image):\n                                image.resizable().scaledToFill()\n                            default:\n                                placeholder(for: item)\n                            }\n                        }\n                    } else {\n                        placeholder(for: item)\n                    }'''
-new_poster = '''                    if let url = item.posterURL {\n                        CachedPosterImage(url: url, targetSize: CGSize(width: 290, height: height * 2)) {\n                            placeholder(for: item)\n                        }\n                    } else {\n                        placeholder(for: item)\n                    }'''
-if old_poster in s:
-    s = s.replace(old_poster, new_poster, 1)
+s = replace_once(
+    s,
+    'private let filters = ["For You", "Popular", "Recently Added", "Action", "Drama"]',
+    'private let filters = ["For You", "Popular", "Recently Added"]',
+)
 
-if "private struct CachedPosterImage" not in s:
-    s += '''\n\nprivate enum PosterImageCache {\n    static let images: NSCache<NSURL, UIImage> = {\n        let cache = NSCache<NSURL, UIImage>()\n        cache.countLimit = 160\n        cache.totalCostLimit = 64 * 1024 * 1024\n        return cache\n    }()\n}\n\nprivate struct CachedPosterImage<Placeholder: View>: View {\n    let url: URL\n    let targetSize: CGSize\n    @ViewBuilder let placeholder: () -> Placeholder\n    @State private var image: UIImage?\n\n    var body: some View {\n        Group {\n            if let image {\n                Image(uiImage: image)\n                    .resizable()\n                    .scaledToFill()\n            } else {\n                placeholder()\n            }\n        }\n        .task(id: url) { await load() }\n    }\n\n    private func load() async {\n        if let cached = PosterImageCache.images.object(forKey: url as NSURL) {\n            image = cached\n            return\n        }\n        do {\n            let (data, _) = try await URLSession.shared.data(from: url)\n            guard !Task.isCancelled, let source = CGImageSourceCreateWithData(data as CFData, nil) else { return }\n            let options: [CFString: Any] = [\n                kCGImageSourceCreateThumbnailFromImageAlways: true,\n                kCGImageSourceCreateThumbnailWithTransform: true,\n                kCGImageSourceThumbnailMaxPixelSize: max(targetSize.width, targetSize.height)\n            ]\n            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return }\n            let decoded = UIImage(cgImage: cgImage)\n            let cost = decoded.cgImage.map { $0.bytesPerRow * $0.height } ?? 0\n            PosterImageCache.images.setObject(decoded, forKey: url as NSURL, cost: cost)\n            guard !Task.isCancelled else { return }\n            image = decoded\n        } catch { }\n    }\n}\n'''
+# Keep this patch safe if the file is already processed or partially patched.
+s = ensure_block(
+    s,
+    'private enum PosterImageCache',
+    '''
+private enum PosterImageCache {
+    static let images: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        cache.countLimit = 160
+        return cache
+    }()
+}
+''',
+)
 
+path.write_text(s, encoding="utf-8")
+
+# PlayerView.swift
 player_path = Path("Shinji/Views/PlayerView.swift")
 p = player_path.read_text(encoding="utf-8")
-old_player_orientation_start = '            UIDevice.current.beginGeneratingDeviceOrientationNotifications()\n            hideParentTabBar(true)'
-new_player_orientation_start = '            UIDevice.current.beginGeneratingDeviceOrientationNotifications()\n            OrientationLockCoordinator.playerDidAppear()\n            hideParentTabBar(true)'
-if old_player_orientation_start in p:
-    p = p.replace(old_player_orientation_start, new_player_orientation_start, 1)
+
+if 'OrientationLockCoordinator.playerDidAppear()' not in p:
+    p = replace_once(
+        p,
+        '            UIDevice.current.beginGeneratingDeviceOrientationNotifications()\n            hideParentTabBar(true)',
+        '            UIDevice.current.beginGeneratingDeviceOrientationNotifications()\n            OrientationLockCoordinator.playerDidAppear()\n            hideParentTabBar(true)',
+    )
+
 player_path.write_text(p, encoding="utf-8")
-path.write_text(s, encoding="utf-8")
