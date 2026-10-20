@@ -304,6 +304,9 @@ struct PlayerView: View {
 private struct PlayerSettingsSheet: View {
     let sendCommand: (String) -> Void
     @Environment(\.dismiss) private var dismiss
+
+    private let playbackSpeeds: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 3.5, 4.0]
+
     var body: some View {
         NavigationStack {
             List {
@@ -313,15 +316,23 @@ private struct PlayerSettingsSheet: View {
                     Button("Reset Video Zoom") { sendCommand("set video-zoom 0"); dismiss() }
                 }
                 Section("Playback") {
-                    Button("Normal Speed") { sendCommand("set speed 1"); dismiss() }
-                    Button("1.25×") { sendCommand("set speed 1.25"); dismiss() }
-                    Button("1.5×") { sendCommand("set speed 1.5"); dismiss() }
-                    Button("2×") { sendCommand("set speed 2"); dismiss() }
+                    Menu("Playback Speed") {
+                        ForEach(playbackSpeeds, id: \.self) { speed in
+                            Button(speedLabel(speed)) {
+                                sendCommand("set speed \(speed)")
+                            }
+                        }
+                    }
                 }
             }
             .navigationTitle("Player Settings")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
+    }
+
+    private func speedLabel(_ speed: Double) -> String {
+        if speed == 1.0 { return "1× (Normal)" }
+        return speed.formatted(.number.precision(.fractionLength(0...2))) + "×"
     }
 }
 
