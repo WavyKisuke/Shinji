@@ -25,6 +25,9 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Repair known Swift source issues
+        run: python3 Scripts/fix_build_source.py
+
       - name: Build app for device without signing
         run: |
           set -euo pipefail
