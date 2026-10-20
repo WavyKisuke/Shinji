@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-14
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -55,7 +55,7 @@ jobs:
           cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/Shinji.app"
           cd "$RUNNER_TEMP"
           /usr/bin/zip -qry "$GITHUB_WORKSPACE/Shinji-unsigned.ipa" Payload
-          test -f "$GITHUB_WORKSPACE/Shinji-unsigned.ipa"
+          test -s "$GITHUB_WORKSPACE/Shinji-unsigned.ipa"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
