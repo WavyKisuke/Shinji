@@ -1,26 +1,26 @@
 from pathlib import Path
 
-# Repair player commands at build time so every IPA gets working MPV controls.
 player = Path("Shinji/Views/PlayerView.swift")
 text = player.read_text(encoding="utf-8")
 
-# mpv's documented input commands for switching tracks are `cycle audio`
-# and `cycle sub`. `aid`/`sid` are selection properties, not the commands
-# that should be cycled for a player button.
+# mpv's track-switching input commands. Do not rewrite these to aid/sid:
+# aid and sid are runtime selection properties; `audio` and `sub` are the
+# documented cycling commands used by the player input layer.
 text = text.replace('["cycle", "aid"]', '["cycle", "audio"]')
 text = text.replace('["cycle", "sid"]', '["cycle", "sub"]')
 
-# Deterministic pause/play command.
+# Deterministic pause/play.
 text = text.replace(
     'sendCommand(["cycle", "pause"])',
     'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])'
 )
 
-# Add a dedicated playback-speed control if the source does not already have one.
+# Dedicated playback-speed sheet and button.
 if 'showPlaybackSpeed' not in text:
     text = text.replace(
         '    @State private var showSettings = false\n',
-        '    @State private var showSettings = false\n    @State private var showPlaybackSpeed = false\n'
+        '    @State private var showSettings = false\n    @State private var showPlaybackSpeed = false\n',
+        1
     )
     text = text.replace(
         '        .sheet(isPresented: $showSettings) {\n',
@@ -30,7 +30,8 @@ if 'showPlaybackSpeed' not in text:
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSettings) {
-'''
+''',
+        1
     )
     text = text.replace(
         '                bottomButton("gearshape", "Settings") { showSettings = true }\n',
@@ -38,10 +39,12 @@ if 'showPlaybackSpeed' not in text:
                     showPlaybackSpeed = true
                 }
                 bottomButton("gearshape", "Settings") { showSettings = true }
-'''
+''',
+        1
     )
     marker = '\nprivate struct PlayerSettingsSheet: View {'
     speed_sheet = '''
+
 private struct PlaybackSpeedSheet: View {
     let sendCommand: ([String]) -> Void
     @Environment(\\.dismiss) private var dismiss
@@ -72,12 +75,11 @@ private struct PlaybackSpeedSheet: View {
 }
 '''
     if marker in text:
-        text = text.replace(marker, '\n' + speed_sheet + '\nprivate struct PlayerSettingsSheet: View {', 1)
+        text = text.replace(marker, speed_sheet + '\nprivate struct PlayerSettingsSheet: View {', 1)
 
 player.write_text(text, encoding="utf-8")
 
-# Keep the libmpv argv buffer mutable. MPVKit exposes mpv_command as taking
-# UnsafeMutablePointer<UnsafePointer<CChar>?> on this toolchain.
+# Keep the libmpv argv buffer mutable for the current Libmpv toolchain.
 mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
 mpv_text = mpv.read_text(encoding="utf-8")
 old = '''    private func execute(_ arguments: [String], on handle: OpaquePointer) {
