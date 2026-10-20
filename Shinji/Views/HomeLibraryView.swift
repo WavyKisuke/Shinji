@@ -8,12 +8,18 @@ struct HomeLibraryView: View {
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
     @AppStorage("shinjiGlowHex") private var glowHex = "4936FF"
 
-    private var movies: [AddonCatalogItem] { addonStore.catalogItems.filter { $0.type.lowercased() == "movie" } }
-    private var series: [AddonCatalogItem] { addonStore.catalogItems.filter { $0.type.lowercased() == "series" } }
+    // De-duplicate titles coming from multiple installed catalogs so the same
+    // movie/series does not appear repeatedly in different shelves.
+    private var movies: [AddonCatalogItem] { uniqueItems(addonStore.catalogItems.filter { $0.type.lowercased() == "movie" }) }
+    private var series: [AddonCatalogItem] { uniqueItems(addonStore.catalogItems.filter { $0.type.lowercased() == "series" }) }
+
+    // Each shelf gets its own titles. Featured no longer falls back to Popular,
+    // which was causing the same section content to be repeated when a catalog
+    // contained fewer than 24 titles.
     private var popularMovies: [AddonCatalogItem] { Array(movies.prefix(12)) }
     private var popularSeries: [AddonCatalogItem] { Array(series.prefix(12)) }
-    private var featuredMovies: [AddonCatalogItem] { Array(movies.dropFirst(min(12, movies.count)).prefix(12)) }
-    private var featuredSeries: [AddonCatalogItem] { Array(series.dropFirst(min(12, series.count)).prefix(12)) }
+    private var featuredMovies: [AddonCatalogItem] { Array(movies.dropFirst(12).prefix(12)) }
+    private var featuredSeries: [AddonCatalogItem] { Array(series.dropFirst(12).prefix(12)) }
 
     var body: some View {
         NavigationStack {
@@ -23,8 +29,8 @@ struct HomeLibraryView: View {
                     keepWatchingSection
                     catalogSection(title: "Popular - Movies", previewItems: popularMovies, allItems: movies)
                     catalogSection(title: "Popular - Series", previewItems: popularSeries, allItems: series)
-                    catalogSection(title: "Featured - Movies", previewItems: featuredMovies.isEmpty ? popularMovies : featuredMovies, allItems: movies)
-                    catalogSection(title: "Featured - Series", previewItems: featuredSeries.isEmpty ? popularSeries : featuredSeries, allItems: series)
+                    catalogSection(title: "Featured - Movies", previewItems: featuredMovies, allItems: movies)
+                    catalogSection(title: "Featured - Series", previewItems: featuredSeries, allItems: series)
                 }
                 .padding(.top, 10)
                 .padding(.bottom, 36)
@@ -41,6 +47,7 @@ struct HomeLibraryView: View {
         .task { await addonStore.refreshCatalogs() }
     }
 
+    @ViewBuilder
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
@@ -110,6 +117,18 @@ struct HomeLibraryView: View {
             Text("\(items)").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.4))
         }
         .padding(.horizontal, 20)
+    }
+
+    private func uniqueItems(_ items: [AddonCatalogItem]) -> [AddonCatalogItem] {
+        var seen = Set<String>()
+        return items.filter { item in
+            let normalizedName = item.name
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .replacingOccurrences(of: "[^a-z0-9]+", with: " ", options: .regularExpression)
+            let key = "\(item.type.lowercased())|\(normalizedName)|\(item.year ?? "")"
+            return seen.insert(key).inserted
+        }
     }
 
     private func catalogCard(_ item: AddonCatalogItem) -> some View {
