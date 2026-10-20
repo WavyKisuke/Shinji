@@ -3,8 +3,10 @@ import SwiftUI
 struct MainTabView: View {
     var body: some View {
         TabView {
-            UnifiedLibraryView()
-                .tabItem { Label("Movies & TV", systemImage: "play.tv") }
+            UnifiedLibraryView(kind: .movies)
+                .tabItem { Label("Movies", systemImage: "film") }
+            UnifiedLibraryView(kind: .tvShows)
+                .tabItem { Label("TV Shows", systemImage: "play.tv") }
             LibraryView(kind: .live)
                 .tabItem { Label("Live TV", systemImage: "dot.radiowaves.left.and.right") }
             AddonsView()
