@@ -143,7 +143,7 @@ private struct SavedLibraryItemView: View {
 
     private func play() async {
         loading = true
-        let catalog = AddonCatalogItem(id: item.catalogID, type: item.type, name: item.title, posterURL: item.posterURL.flatMap(URL.init(string:)), description: item.description, year: nil, addonName: item.addonName)
+        let catalog = AddonCatalogItem(id: item.catalogID, type: item.type, name: item.title, posterURL: item.posterURL.flatMap(URL.init(string:)), description: item.description, year: nil, genres: [], addonName: item.addonName)
         await addonStore.loadStreams(for: catalog)
         selectedStream = addonStore.streamOptions.first
         showPlayer = selectedStream != nil
