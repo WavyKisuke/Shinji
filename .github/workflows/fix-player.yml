@@ -12,18 +12,23 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-14
-    timeout-minutes: 30
+    runs-on: macos-15-intel
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
-      - name: Verify runner
+      - name: Verify Intel runner and Xcode
         run: |
           set -euo pipefail
+          echo "Architecture: $(uname -m)"
           echo "Runner: $(uname -a)"
           xcodebuild -version
           swift --version
+          test "$(uname -m)" = "x86_64"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -31,8 +36,18 @@ jobs:
       - name: Apply library performance optimizations
         run: python3 Scripts/optimize_library_build.py
 
+      - name: Prepare MPVKit submodule
+        run: |
+          set -euo pipefail
+          if [ -d MPVKit ]; then
+            git submodule update --init --recursive MPVKit || true
+          fi
+
       - name: Generate Xcode project
         run: xcodegen generate
+
+      - name: Resolve Swift packages
+        run: xcodebuild -resolvePackageDependencies -project Shinji.xcodeproj -scheme Shinji
 
       - name: Build unsigned IPA
         run: |
