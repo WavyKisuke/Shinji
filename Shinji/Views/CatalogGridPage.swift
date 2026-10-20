@@ -14,10 +14,10 @@ struct CatalogGridPage: View {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(items) { item in
                     NavigationLink {
-                        UnifiedLibraryView(kind: item.type.lowercased() == "movie" ? .movies : .tvShows)
+                        UnifiedLibraryView(kind: item.type.lowercased() == "movie" ? .movies : .tvShows, initialItem: item)
                     } label: {
                         VStack(alignment: .leading, spacing: 8) {
-                            ZStack {
+                            ZStack(alignment: .bottomLeading) {
                                 RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.07))
                                 if let url = item.posterURL {
                                     AsyncImage(url: url) { phase in
@@ -25,12 +25,15 @@ struct CatalogGridPage: View {
                                         else { placeholder(for: item) }
                                     }
                                 } else { placeholder(for: item) }
+                                LinearGradient(colors: [.clear, .black.opacity(0.72)], startPoint: .center, endPoint: .bottom)
+                                Text(item.type.lowercased() == "movie" ? "MOVIE" : "TV")
+                                    .font(.system(size: 8, weight: .black)).tracking(1.2).foregroundStyle(.white.opacity(0.85)).padding(10)
                             }
                             .frame(maxWidth: .infinity)
                             .aspectRatio(0.69, contentMode: .fit)
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             Text(item.name).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(2)
-                            Text(item.year ?? "").font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.5))
+                            Text(item.year ?? item.addonName).font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
                         }
                     }
                     .buttonStyle(.plain)
