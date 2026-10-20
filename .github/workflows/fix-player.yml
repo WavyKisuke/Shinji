@@ -33,6 +33,7 @@ jobs:
           cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/Shinji.app"
           cd "$RUNNER_TEMP"
           /usr/bin/zip -qry "$GITHUB_WORKSPACE/Shinji-unsigned.ipa" Payload
+      # Trigger a fresh build for the latest player changes.
       - uses: actions/upload-artifact@v4
         with:
           name: Shinji-player-fix-unsigned-ipa
