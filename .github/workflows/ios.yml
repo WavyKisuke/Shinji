@@ -31,6 +31,9 @@ jobs:
       - name: Repair player controls
         run: python3 Scripts/fix_player_controls.py
 
+      - name: Apply Nuvio-style player behavior
+        run: python3 Scripts/fix_nuvio_player.py
+
       - name: Ensure catalog metadata model
         run: python3 Scripts/fix_catalog_metadata.py
 
