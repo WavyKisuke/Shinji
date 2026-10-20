@@ -21,15 +21,15 @@ struct PlayerView: View {
     @State private var controlsLocked = false
 
     var body: some View {
-        GeometryReader { proxy in
+        GeometryReader { _ in
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                playerSurface(in: proxy.size)
+                playerSurface()
                     .zIndex(0)
 
                 if showControls && !controlsLocked {
-                    controlsOverlay(in: proxy.size)
+                    controlsOverlay()
                         .zIndex(10)
                 }
 
@@ -52,11 +52,22 @@ struct PlayerView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .navigationBarHidden(true)
-        .onAppear { startInternalPlayback() }
-        .onDisappear { hideControlsTask?.cancel() }
+        .toolbar(isFullscreen ? .hidden : .visible, for: .tabBar)
+        .onAppear {
+            startInternalPlayback()
+        }
+        .onChange(of: isFullscreen) { fullscreen in
+            OrientationLockCoordinator.setPlayerFullscreen(fullscreen)
+            showControls = true
+            scheduleHide()
+        }
+        .onDisappear {
+            hideControlsTask?.cancel()
+            OrientationLockCoordinator.setPlayerFullscreen(false)
+        }
     }
 
-    private func playerSurface(in size: CGSize) -> some View {
+    private func playerSurface() -> some View {
         MPVPlayerSurface(
             url: url,
             headers: headers,
@@ -80,16 +91,12 @@ struct PlayerView: View {
                 if total > 0 { isPreparingPlayback = false }
             }
         )
-        .frame(
-            width: isFullscreen ? size.height : size.width,
-            height: isFullscreen ? size.width : size.height
-        )
-        .rotationEffect(.degrees(isFullscreen ? 90 : 0))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
         .contentShape(Rectangle())
-        // The Metal-backed UIView can otherwise win UIKit hit-testing even though
-        // the SwiftUI overlay is visually above it. Let it receive taps only when
-        // the controls are hidden; when controls are visible, buttons own the touch.
+        // Keep one MPV/Metal surface for both portrait and fullscreen. The device
+        // orientation changes the available geometry instead of rotating/resizing
+        // the Metal view manually, which avoids the fullscreen crash/resource issue.
         .allowsHitTesting(!showControls || controlsLocked)
         .onTapGesture {
             guard playbackError == nil else { return }
@@ -100,7 +107,7 @@ struct PlayerView: View {
         }
     }
 
-    private func controlsOverlay(in size: CGSize) -> some View {
+    private func controlsOverlay() -> some View {
         ZStack {
             LinearGradient(
                 colors: [.black.opacity(0.52), .clear, .black.opacity(0.66)],
@@ -117,11 +124,7 @@ struct PlayerView: View {
                 bottomControls
             }
         }
-        .frame(
-            width: isFullscreen ? size.height : size.width,
-            height: isFullscreen ? size.width : size.height
-        )
-        .rotationEffect(.degrees(isFullscreen ? 90 : 0))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(.white)
         .contentShape(Rectangle())
         .transition(.opacity)
@@ -156,11 +159,7 @@ struct PlayerView: View {
             Spacer()
 
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isFullscreen.toggle()
-                    showControls = true
-                }
-                scheduleHide()
+                isFullscreen.toggle()
             } label: {
                 Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 17, weight: .semibold))
