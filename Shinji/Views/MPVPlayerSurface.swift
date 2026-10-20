@@ -8,7 +8,7 @@ struct MPVPlayerSurface: UIViewRepresentable {
     let headers: [String: String]
     var muted: Bool = false
     var commandID: Int = 0
-    var command: String?
+    var command: [String]?
     var onStatus: (String) -> Void
     var onError: (String) -> Void
     var onPlaybackUpdate: (Double, Double, Bool) -> Void = { _, _, _ in }
@@ -42,9 +42,11 @@ struct MPVPlayerSurface: UIViewRepresentable {
         private var mpv: OpaquePointer?
         private weak var surface: MPVMetalView?
         private var started = false
-        private var lastCommandID = 0
+        private var lastCommandID = -1
+        private var lastMuted: Bool?
         private var isShuttingDown = false
         private let stateLock = NSLock()
+        private let commandQueue = DispatchQueue(label: "shinji.mpv.commands", qos: .userInitiated)
 
         var onStatus: ((String) -> Void)?
         var onError: ((String) -> Void)?
@@ -110,16 +112,23 @@ struct MPVPlayerSurface: UIViewRepresentable {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in self?.readEvents(handle: handle) }
         }
 
-        func handleCommand(commandID: Int, command: String?) {
+        func handleCommand(commandID: Int, command: [String]?) {
             stateLock.lock()
             let shouldSend = commandID != lastCommandID && !isShuttingDown
             if shouldSend { lastCommandID = commandID }
             stateLock.unlock()
             guard shouldSend, let command, !command.isEmpty else { return }
-            issue(command.split(separator: " ").map(String.init))
+            issue(command)
         }
 
         private func issue(_ arguments: [String]) {
+            commandQueue.async { [weak self] in
+                guard let self else { return }
+                self.issueOnCommandQueue(arguments)
+            }
+        }
+
+        private func issueOnCommandQueue(_ arguments: [String]) {
             var pointers: [UnsafePointer<CChar>?] = arguments.map { value in
                 guard let pointer = strdup(value) else { return nil }
                 return UnsafePointer(pointer)
@@ -128,9 +137,14 @@ struct MPVPlayerSurface: UIViewRepresentable {
             defer { for pointer in pointers { if let pointer { free(UnsafeMutablePointer(mutating: pointer)) } } }
 
             stateLock.lock()
-            guard let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
-            let result = pointers.withUnsafeMutableBufferPointer { buffer in mpv_command(handle, buffer.baseAddress) }
+            let handle = mpv
+            let shuttingDown = isShuttingDown
             stateLock.unlock()
+            guard let handle, !shuttingDown else { return }
+
+            let result = pointers.withUnsafeMutableBufferPointer { buffer in
+                mpv_command(handle, buffer.baseAddress)
+            }
 
             if result < 0 {
                 let message = String(cString: mpv_error_string(result))
@@ -152,10 +166,20 @@ struct MPVPlayerSurface: UIViewRepresentable {
 
         func setMuted(_ muted: Bool) {
             stateLock.lock()
-            guard let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
-            var value: Int32 = muted ? 1 : 0
-            _ = mpv_set_property(handle, "mute", MPV_FORMAT_FLAG, &value)
+            guard lastMuted != muted, let handle = mpv, !isShuttingDown else { stateLock.unlock(); return }
+            lastMuted = muted
             stateLock.unlock()
+
+            commandQueue.async { [weak self] in
+                guard let self else { return }
+                self.stateLock.lock()
+                let activeHandle = self.mpv
+                let shuttingDown = self.isShuttingDown
+                self.stateLock.unlock()
+                guard let activeHandle, !shuttingDown else { return }
+                var value: Int32 = muted ? 1 : 0
+                _ = mpv_set_property(activeHandle, "mute", MPV_FORMAT_FLAG, &value)
+            }
         }
 
         private func readEvents(handle: OpaquePointer) {
@@ -261,6 +285,7 @@ final class MPVMetalView: UIView {
         metalLayer.pixelFormat = .bgra8Unorm
         metalLayer.framebufferOnly = true
         metalLayer.contentsScale = UIScreen.main.nativeScale
+        metalLayer.framebufferOnly = true
         metalLayer.wantsExtendedDynamicRangeContent = true
     }
 }
