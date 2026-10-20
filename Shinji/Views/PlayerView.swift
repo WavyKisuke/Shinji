@@ -25,20 +25,12 @@ struct PlayerView: View {
     var body: some View {
         GeometryReader { _ in
             ZStack {
-                // Keep the tap-to-show/hide gesture behind the actual controls.
-                // A transparent sibling above the player can steal touches from
-                // SwiftUI Buttons/Slider even when those views have a higher zIndex.
-                Color.black
-                    .ignoresSafeArea()
+                playerSurface()
+                    .zIndex(0)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         toggleControls()
                     }
-                    .zIndex(-2)
-
-                playerSurface()
-                    .zIndex(0)
-                    .allowsHitTesting(false)
 
                 if showControls {
                     controlsOverlay()
@@ -163,6 +155,7 @@ struct PlayerView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
+        .allowsHitTesting(true)
     }
 
     private func controlsOverlay() -> some View {
