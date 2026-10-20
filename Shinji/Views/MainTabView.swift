@@ -2,7 +2,6 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab = 0
-    @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -13,7 +12,7 @@ struct MainTabView: View {
                 case 1:
                     LibraryView(kind: .movies)
                 case 2:
-                    UnifiedLibraryView(kind: .movies)
+                    UnifiedLibraryView(kind: .all)
                 default:
                     SettingsView()
                 }
