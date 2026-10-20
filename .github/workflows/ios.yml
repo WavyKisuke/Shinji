@@ -22,9 +22,6 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Apply library performance optimizations
-        run: python3 Scripts/optimize_library_build.py
-
       - name: Generate Xcode project
         run: xcodegen generate
 
