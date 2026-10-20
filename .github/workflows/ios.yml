@@ -37,6 +37,9 @@ jobs:
       - name: Apply Nuvio-style player behavior
         run: python3 Scripts/fix_nuvio_player.py
 
+      - name: Polish player fullscreen and seek gestures
+        run: python3 Scripts/fix_player_polish.py
+
       - name: Ensure catalog metadata model
         run: python3 Scripts/fix_catalog_metadata.py
 
