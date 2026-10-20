@@ -27,11 +27,14 @@ struct PlayerView: View {
                 Color.black.ignoresSafeArea().zIndex(-2)
                 playerSurface().zIndex(0).allowsHitTesting(false)
 
-                // The video hit target only toggles the chrome. Seeking is explicit via the
-                // +/-10s buttons, so waking the controls never unexpectedly jumps playback.
+                // IMPORTANT: this layer is only for waking/dismissing the player chrome.
+                // It never sends a seek command. All seeking is done by the dedicated
+                // +/-10 second buttons or the timeline slider.
                 Color.clear
                     .contentShape(Rectangle())
-                    .onTapGesture { toggleControls() }
+                    .onTapGesture(count: 1) {
+                        wakeOrDismissControls()
+                    }
                     .zIndex(1)
                     .allowsHitTesting(!controlsLocked)
 
@@ -99,7 +102,7 @@ struct PlayerView: View {
         }
     }
 
-    private func toggleControls() {
+    private func wakeOrDismissControls() {
         guard playbackError == nil, !controlsLocked else { return }
         hideControlsTask?.cancel()
         withAnimation(.easeInOut(duration: 0.16)) {
