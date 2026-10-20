@@ -19,12 +19,25 @@ text = text.replace(
     '    private let filters = ["For You", "Popular", "Recently Added"]',
 )
 
-# The "For You" branch used to render the same More shelf a second time.
-duplicate_more = '''                    if selectedFilter == "For You" {
-                        shelfSection(kind == .movies ? "More Movies" : "More TV Shows", items: moreItems)
-                    }
+# Match against the actual catalog genre metadata, not just the title or
+# description. The old implementation made Action/Drama filters depend on a
+# word appearing in the title/description, which could leave only one result.
+old_matches = '''    private func matches(_ item: AddonCatalogItem, genre: String) -> Bool {
+        let text = "\\(item.name) \\(item.description ?? "")"
+        return text.localizedCaseInsensitiveContains(genre)
+    }
 '''
-text = text.replace(duplicate_more, "", 1)
+new_matches = '''    private func matches(_ item: AddonCatalogItem, genre: String) -> Bool {
+        if item.genres.contains(where: { $0.localizedCaseInsensitiveCompare(genre) == .orderedSame }) {
+            return true
+        }
+        let normalizedGenre = genre.trimmingCharacters(in: .whitespacesAndNewlines)
+        return item.genres.contains { stored in
+            stored.localizedCaseInsensitiveContains(normalizedGenre) || normalizedGenre.localizedCaseInsensitiveContains(stored)
+        }
+    }
+'''
+text = text.replace(old_matches, new_matches, 1)
 
 # Add persistent My List bookmarks to catalog cards and title details.
 if '@StateObject private var watchlistStore = WatchlistStore.shared' not in text:
@@ -77,10 +90,41 @@ stream_title_replacement = '''                    HStack(alignment: .top, spacin
                     Text(watchlistStore.contains(catalogID: item.id, addonName: item.addonName) ? "Saved to My List — watch it later." : "Save this title to My List so you can watch it later.")
                         .font(.caption)
                         .foregroundStyle(Color(hex: accentHex))
-                    if let description = item.description, !description.isEmpty {
+                    if let description = item.description, !item.description!.isEmpty {
 '''
 text = text.replace(stream_title_anchor, stream_title_replacement, 1)
 unified.write_text(text, encoding="utf-8")
+
+# Carry genre metadata from Stremio catalog responses into the model so the
+# UI can return every movie in a selected genre.
+addon = Path("Shinji/Services/AddonStore.swift")
+addon_text = addon.read_text(encoding="utf-8")
+addon_text = addon_text.replace(
+    '    let description: String?\n    let addonName: String\n',
+    '    let description: String?\n    let genres: [String]\n    let addonName: String\n',
+    1,
+)
+addon_text = addon_text.replace(
+    '            let poster = (meta["poster"] as? String).flatMap(URL.init(string:))\n            return AddonCatalogItem(\n',
+    '''            let poster = (meta["poster"] as? String).flatMap(URL.init(string:))
+            let genres: [String]
+            if let values = meta["genres"] as? [String] {
+                genres = values
+            } else if let value = meta["genre"] as? String {
+                genres = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            } else {
+                genres = []
+            }
+            return AddonCatalogItem(
+''',
+    1,
+)
+addon_text = addon_text.replace(
+    '                description: meta["description"] as? String,\n                addonName: addonName\n',
+    '                description: meta["description"] as? String,\n                genres: genres,\n                addonName: addonName\n',
+    1,
+)
+addon.write_text(addon_text, encoding="utf-8")
 
 # Keep the MPV command buffer ABI fix in every CI build.
 mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
