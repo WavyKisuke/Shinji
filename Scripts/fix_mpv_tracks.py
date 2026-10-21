@@ -133,11 +133,14 @@ m = m.replace(
     '                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)',
     1,
 )
-if "case MPV_EVENT_TRACKS_CHANGED:" not in m:
-    m = m.replace(
-        "                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)\n",
-        "                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)\n                case MPV_EVENT_TRACKS_CHANGED:\n                    self.refreshTracksSoon(handle)\n",
-        1,
-    )
+
+# MPVKit's public headers do not expose MPV_EVENT_TRACKS_CHANGED. Track-list
+# changes are already covered by the observed track-list/count, aid and sid
+# properties plus the post-load retries above. Never emit an unavailable
+# enum reference into the generated Swift source.
+m = m.replace(
+    '                case MPV_EVENT_TRACKS_CHANGED:\n                    self.refreshTracksSoon(handle)\n',
+    '',
+)
 
 path.write_text(m, encoding="utf-8")
