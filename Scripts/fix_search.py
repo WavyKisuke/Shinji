@@ -94,7 +94,7 @@ replacement = '''    private var browseResults: [AddonCatalogItem] {
     private func saveSearch(_ value: String) {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        var history = searchHistory.filter { !$0.caseInsensitiveCompare(trimmed).rawValue.isEqual(0) }
+        var history = searchHistory.filter { $0.caseInsensitiveCompare(trimmed) != .orderedSame }
         history.insert(trimmed, at: 0)
         searchHistoryRaw = history.prefix(12).joined(separator: "\\u{1F}")
     }
@@ -119,19 +119,15 @@ replacement = '''    private var browseResults: [AddonCatalogItem] {
 '''
 text = text[:start] + replacement + text[end:]
 
-# Show removable recent searches below the field.
-needle = '''                    searchField
+text = text.replace('''                    searchField
                     typePicker
-'''
-insert = '''                    searchField
+''', '''                    searchField
                     if query.isEmpty && !searchHistory.isEmpty {
                         recentSearches
                     }
                     typePicker
-'''
-text = text.replace(needle, insert, 1)
+''', 1)
 
-# Improve empty state while a remote search is running.
 text = text.replace('''                    if results.isEmpty {
                         emptyState
                     } else {''', '''                    if isSearching {
@@ -146,7 +142,6 @@ text = text.replace('''                    if results.isEmpty {
                         emptyState
                     } else {''', 1)
 
-# Search on typing with a short debounce, and refresh when the type filter changes.
 text = text.replace('''        .task { await addonStore.refreshCatalogs() }
 ''', '''        .task { await addonStore.refreshCatalogs() }
         .task(id: "\\(query)|\\(selectedType)") {
@@ -156,14 +151,12 @@ text = text.replace('''        .task { await addonStore.refreshCatalogs() }
         }
 ''', 1)
 
-# Add submit behavior to the search field.
 text = text.replace('''                .autocorrectionDisabled()
             if !query.isEmpty {''', '''                .autocorrectionDisabled()
                 .submitLabel(.search)
                 .onSubmit { saveSearch(query) }
             if !query.isEmpty {''', 1)
 
-# Add recent-search UI before the type picker.
 marker = '    private var typePicker: some View {'
 recent = '''    private var recentSearches: some View {
         VStack(alignment: .leading, spacing: 10) {
