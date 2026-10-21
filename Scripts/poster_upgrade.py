@@ -9,12 +9,14 @@ def replace_once(path, old, new):
         p.write_text(text, encoding="utf-8")
 
 player = "Shinji/Views/PlayerView.swift"
-replace_once(
-    player,
-    '    var headers: [String: String] = [:]\n',
-    '    var headers: [String: String] = [:]\n    var posterURL: URL? = nil\n',
-)
-text = Path(player).read_text(encoding="utf-8")
+player_path = Path(player)
+text = player_path.read_text(encoding="utf-8")
+if "var posterURL: URL? = nil" not in text:
+    text = text.replace(
+        '    var headers: [String: String] = [:]\n',
+        '    var headers: [String: String] = [:]\n    var posterURL: URL? = nil\n',
+        1,
+    )
 text = text.replace(
     'continueStore.record(id: url.absoluteString, title: title, url: url, position: time, duration: total, headers: headers)',
     'continueStore.record(id: url.absoluteString, title: title, url: url, position: time, duration: total, headers: headers, posterURL: posterURL?.absoluteString)',
@@ -23,7 +25,7 @@ text = text.replace(
     'continueStore.record(id: url.absoluteString, title: title, url: url, position: position, duration: duration, headers: headers)',
     'continueStore.record(id: url.absoluteString, title: title, url: url, position: position, duration: duration, headers: headers, posterURL: posterURL?.absoluteString)',
 )
-Path(player).write_text(text, encoding="utf-8")
+player_path.write_text(text, encoding="utf-8")
 
 unified = "Shinji/Views/UnifiedLibraryView.swift"
 replace_once(
