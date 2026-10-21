@@ -43,6 +43,18 @@ jobs:
       - name: Apply final Nuvio player implementation
         run: python3 Scripts/fix_nuvio_player.py
 
+      - name: Finalize Nuvio MPV track commands
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ["Shinji/Views/PlayerView.swift", "Shinji/Views/MPVPlayerSurface.swift"]:
+              p = Path(name)
+              text = p.read_text(encoding="utf-8")
+              text = text.replace('["cycle", "audio"]', '["cycle", "aid"]')
+              text = text.replace('["cycle", "sub"]', '["cycle", "sid"]')
+              p.write_text(text, encoding="utf-8")
+          PY
+
       - name: Ensure catalog metadata model
         run: python3 Scripts/fix_catalog_metadata.py
 
