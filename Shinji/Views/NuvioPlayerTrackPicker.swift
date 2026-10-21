@@ -28,9 +28,21 @@ struct NuvioPlayerTrackPicker: View {
                 .onTapGesture(perform: onDismiss)
 
             VStack(alignment: .leading, spacing: 12) {
-                Text(title)
-                    .font(.title2.weight(.semibold))
+                HStack {
+                    Text(title)
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .frame(width: 34, height: 34)
+                            .background(Color.white.opacity(0.10), in: Circle())
+                    }
+                    .buttonStyle(.plain)
                     .foregroundStyle(.white)
+                    .accessibilityLabel("Close \(title)")
+                }
 
                 ScrollView {
                     LazyVStack(spacing: 6) {
@@ -48,6 +60,23 @@ struct NuvioPlayerTrackPicker: View {
                             ) {
                                 onSelect(track.id)
                             }
+                        }
+
+                        if tracks.isEmpty {
+                            VStack(spacing: 10) {
+                                Image(systemName: offOption ? "captions.bubble" : "waveform")
+                                    .font(.system(size: 25, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.55))
+                                Text(offOption ? "No subtitle tracks available" : "No audio tracks available")
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.82))
+                                Text(offOption ? "This stream did not provide subtitles." : "This stream did not provide alternate audio tracks.")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 34)
                         }
                     }
                 }
