@@ -25,34 +25,55 @@ final class WatchlistStore: ObservableObject {
         items.contains { $0.catalogID == catalogID && $0.addonName == addonName }
     }
 
-    func toggle(_ item: AddonCatalogItem) {
-        if let existing = items.first(where: { $0.catalogID == item.id && $0.addonName == item.addonName }) {
-            items.removeAll { $0.id == existing.id }
-        } else {
-            let id = "\(item.addonName)::\(item.id)"
-            items.insert(WatchlistItem(
-                id: id,
-                catalogID: item.id,
-                type: item.type,
-                title: item.name,
-                posterURL: item.posterURL?.absoluteString,
-                description: item.description,
-                addonName: item.addonName,
-                addedAt: Date()
-            ), at: 0)
-            items = Array(items.prefix(100))
-        }
+    @discardableResult
+    func add(_ item: AddonCatalogItem) -> Bool {
+        guard !contains(catalogID: item.id, addonName: item.addonName) else { return false }
+
+        let watchlistItem = WatchlistItem(
+            id: "\(item.addonName)::\(item.id)",
+            catalogID: item.id,
+            type: item.type,
+            title: item.name,
+            posterURL: item.posterURL?.absoluteString,
+            description: item.description,
+            addonName: item.addonName,
+            addedAt: Date()
+        )
+        items.insert(watchlistItem, at: 0)
+        items = Array(items.prefix(100))
         save()
+        objectWillChange.send()
+        return true
+    }
+
+    @discardableResult
+    func remove(catalogID: String, addonName: String) -> Bool {
+        let before = items.count
+        items.removeAll { $0.catalogID == catalogID && $0.addonName == addonName }
+        guard items.count != before else { return false }
+        save()
+        objectWillChange.send()
+        return true
+    }
+
+    func toggle(_ item: AddonCatalogItem) {
+        if contains(catalogID: item.id, addonName: item.addonName) {
+            _ = remove(catalogID: item.id, addonName: item.addonName)
+        } else {
+            _ = add(item)
+        }
     }
 
     func remove(_ item: WatchlistItem) {
         items.removeAll { $0.id == item.id }
         save()
+        objectWillChange.send()
     }
 
     func clearAll() {
         items.removeAll()
         save()
+        objectWillChange.send()
     }
 
     private func load() {
