@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 path = Path("Shinji/Services/AddonStore.swift")
 text = path.read_text(encoding="utf-8")
@@ -25,11 +24,19 @@ if "let audioTracks: [AddonExternalTrack]" not in text:
     text = text.replace(marker, "    let headers: [String: String]\n    let audioTracks: [AddonExternalTrack]\n    let subtitles: [AddonExternalTrack]\n}", 1)
 
 if "audioTracks: parseExternalTracks" not in text:
-    pattern = r'''(?P<indent>\s*)found\.append\(AddonStreamOption\(\s*id: optionID,\s*title: "\\\(streamTitle\) · \\\(addon\.name\)",\s*url: parsedURL,\s*headers: suppliedHeaders\s*\)\)'''
-    match = re.search(pattern, text)
-    if not match:
+    start = text.find("found.append(AddonStreamOption(")
+    if start < 0:
         raise SystemExit("stream construction block not found")
-    indent = match.group("indent")
+    end = text.find("\n                        ))", start)
+    if end < 0:
+        raise SystemExit("stream construction block end not found")
+    end += len("\n                        ))")
+    old = text[start:end]
+    if "id: optionID" not in old or "headers: suppliedHeaders" not in old:
+        raise SystemExit("unexpected stream construction block")
+    indent_start = start
+    line_start = text.rfind("\n", 0, indent_start) + 1
+    indent = text[line_start:start]
     replacement = f'''{indent}found.append(AddonStreamOption(
 {indent}    id: optionID,
 {indent}    title: "\\(streamTitle) · \\(addon.name)",
@@ -38,7 +45,7 @@ if "audioTracks: parseExternalTracks" not in text:
 {indent}    audioTracks: parseExternalTracks(stream["audioTracks"], fallbackHeaders: suppliedHeaders, prefix: "audio"),
 {indent}    subtitles: parseExternalTracks(stream["subtitles"], fallbackHeaders: suppliedHeaders, prefix: "sub")
 {indent}))'''
-    text = text[:match.start()] + replacement + text[match.end():]
+    text = text[:start] + replacement + text[end:]
 
 if "private func parseExternalTracks" not in text:
     marker = "    private func stringDictionary(_ value: Any?) -> [String: String]? {"
