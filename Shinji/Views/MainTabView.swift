@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab = 0
+    @State private var playerPresented = false
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
 
     private var accent: Color { Color(hex: accentHex) }
@@ -18,12 +19,19 @@ struct MainTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            tabBar
-                .padding(.horizontal, 20)
-                .padding(.bottom, 10)
+            if !playerPresented {
+                tabBar
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 10)
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        .onReceive(NotificationCenter.default.publisher(for: .shinjiPlayerVisibility)) { notification in
+            withAnimation(.easeInOut(duration: 0.18)) {
+                playerPresented = notification.userInfo?["visible"] as? Bool ?? false
+            }
+        }
     }
 
     private var tabBar: some View {
@@ -61,4 +69,8 @@ struct MainTabView: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+extension Notification.Name {
+    static let shinjiPlayerVisibility = Notification.Name("ShinjiPlayerVisibility")
 }
