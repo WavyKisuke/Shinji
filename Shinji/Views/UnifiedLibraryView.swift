@@ -172,7 +172,7 @@ private struct SavedLibraryItemView: View {
         .preferredColorScheme(.dark)
         .fullScreenCover(isPresented: $showPlayer) {
             if let stream = selectedStream {
-                PlayerView(url: stream.url, title: item.title, headers: stream.headers, posterURL: item.posterURL.flatMap(URL.init(string:)))
+                PlayerView(url: stream.url, title: item.title, headers: stream.headers)
             }
         }
     }
