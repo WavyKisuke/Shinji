@@ -2,7 +2,13 @@ name: Build unsigned IPA
 
 on:
   push:
-    branches: [main, master, feature/player-fullscreen-audio-track, fix/player-black-screen]
+    branches:
+      - main
+      - master
+      - feature/player-fullscreen-audio-track
+      - fix/player-black-screen
+      - nuvio-player-optimization
+      - player/nuvio-kotlin-optimization
   workflow_dispatch:
 
 permissions:
