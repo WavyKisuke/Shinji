@@ -37,21 +37,28 @@ final class OrientationLockCoordinator {
         let center = NotificationCenter.default
         observers.append(
             center.addObserver(forName: playerDidAppearNotification, object: nil, queue: .main) { [weak self] _ in
-                self?.playerIsActive = true
+                guard let self else { return }
+                self.playerIsActive = true
+                self.playerWantsLandscape = false
+                self.supportedOrientations = .portrait.union(.landscape)
+                self.refreshSupportedOrientations()
             }
         )
         observers.append(
             center.addObserver(forName: lockPlayerToLandscapeNotification, object: nil, queue: .main) { [weak self] _ in
-                self?.playerIsActive = true
-                self?.playerWantsLandscape = true
-                self?.setPlayerOrientation(landscape: true)
+                guard let self else { return }
+                self.playerIsActive = true
+                self.playerWantsLandscape = true
+                self.setPlayerOrientation(landscape: true)
             }
         )
         observers.append(
             center.addObserver(forName: unlockPlayerOrientationNotification, object: nil, queue: .main) { [weak self] _ in
-                self?.playerIsActive = false
-                self?.playerWantsLandscape = false
-                self?.setPlayerOrientation(landscape: false)
+                guard let self else { return }
+                self.playerIsActive = false
+                self.playerWantsLandscape = false
+                self.supportedOrientations = .portrait
+                self.setPlayerOrientation(landscape: false)
             }
         )
         observers.append(
@@ -87,25 +94,34 @@ final class OrientationLockCoordinator {
         )
     }
 
-    private func setPlayerOrientation(landscape: Bool) {
-        supportedOrientations = landscape ? .landscape : .portrait
-
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }) else { return }
-
+    private func refreshSupportedOrientations() {
+        guard let windowScene = activeWindowScene else { return }
         windowScene.windows.forEach { $0.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations() }
+    }
+
+    private func setPlayerOrientation(landscape: Bool) {
+        supportedOrientations = landscape ? .landscape : (playerIsActive ? .portrait.union(.landscape) : .portrait)
+        refreshSupportedOrientations()
+
+        guard let windowScene = activeWindowScene else { return }
 
         if #available(iOS 16.0, *) {
-            let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: supportedOrientations)
+            let target: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
+            let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: target)
             windowScene.requestGeometryUpdate(preferences) { error in
-                print("[OrientationLockCoordinator] Geometry update: \(error.localizedDescription)")
+                if let error { print("[OrientationLockCoordinator] Geometry update: \(error.localizedDescription)") }
             }
         }
 
         let orientation: UIInterfaceOrientation = landscape ? preferredLandscapeOrientation : .portrait
         UIDevice.current.setValue(orientation.rawValue, forKey: "orientation")
         UIViewController.attemptRotationToDeviceOrientation()
+    }
+
+    private var activeWindowScene: UIWindowScene? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })
     }
 
     private var preferredLandscapeOrientation: UIInterfaceOrientation {
@@ -115,9 +131,7 @@ final class OrientationLockCoordinator {
         case .landscapeRight:
             return .landscapeRight
         default:
-            if let sceneOrientation = UIApplication.shared.connectedScenes
-                .compactMap({ ($0 as? UIWindowScene)?.interfaceOrientation })
-                .first(where: { $0.isLandscape }) {
+            if let sceneOrientation = activeWindowScene?.interfaceOrientation, sceneOrientation.isLandscape {
                 return sceneOrientation
             }
             return .landscapeRight
