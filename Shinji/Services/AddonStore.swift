@@ -308,7 +308,7 @@ final class AddonStore: ObservableObject {
             guard let id = meta["id"] as? String,
                   let name = meta["name"] as? String else { return nil }
             let itemType = (meta["type"] as? String) ?? type
-            let poster = (meta["poster"] as? String).flatMap(URL.init(string:))
+            let poster = resolvePosterURL(from: meta)
             let year: String? = {
                 if let value = meta["releaseInfo"] as? String, !value.isEmpty { return String(value.prefix(4)) }
                 if let value = meta["year"] as? Int { return String(value) }
@@ -325,6 +325,33 @@ final class AddonStore: ObservableObject {
                 addonName: addonName
             )
         }
+    }
+
+    private func resolvePosterURL(from meta: [String: Any]) -> URL? {
+        let rawCandidates: [String?] = [
+            meta["poster"] as? String,
+            meta["poster_url"] as? String,
+            meta["posterURL"] as? String,
+            meta["image"] as? String,
+            meta["thumbnail"] as? String,
+            meta["background"] as? String,
+            (meta["poster"] as? [String: Any])?["url"] as? String,
+            (meta["poster"] as? [String: Any])?["src"] as? String,
+            (meta["poster"] as? [String: Any])?["image"] as? String,
+            (meta["poster"] as? [String: Any])?["large"] as? String,
+            (meta["poster"] as? [String: Any])?["medium"] as? String,
+            (meta["poster"] as? [String: Any])?["small"] as? String
+        ]
+
+        for candidate in rawCandidates {
+            guard let candidate, !candidate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? trimmed
+            if let url = URL(string: encoded) {
+                return url
+            }
+        }
+        return nil
     }
 
     private func saveAddons() {
