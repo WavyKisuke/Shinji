@@ -185,7 +185,7 @@ struct HomeLibraryView: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.08))
                 if let rawPoster = entry.posterURL, let poster = URL(string: rawPoster) {
                     AsyncImage(url: poster) { phase in
-                        if case .success(let image) in phase { image.resizable().scaledToFill() } else { Color.white.opacity(0.06) }
+                        if case .success(let image) = phase { image.resizable().scaledToFill() } else { Color.white.opacity(0.06) }
                     }
                 }
                 LinearGradient(colors: [.clear, .black.opacity(0.92)], startPoint: .center, endPoint: .bottom)
