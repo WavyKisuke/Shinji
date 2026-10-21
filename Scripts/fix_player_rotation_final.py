@@ -19,11 +19,20 @@ if old_layout in text:
 if "metalLayer.needsDisplayOnBoundsChange" not in text:
     text = text.replace(
         '        metalLayer.framebufferOnly = true\n',
-        '        metalLayer.framebufferOnly = true\n        metalLayer.needsDisplayOnBoundsChange = true\n',
+        '        metalLayer.framebufferOnly = true\n        metalLayer.needsDisplayOnBoundsChange = true\n        metalLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]\n',
         1,
     )
 
-mpv_path.write_text(text, encoding="utf-8")
+# Fill the landscape player without stretching the movie. MPV normally
+# preserves the source aspect ratio and adds black bars when it differs from
+# the player surface. Panscan crops only the excess edges so the video fills
+# the entire fullscreen surface while remaining proportional.
+if '"panscan", "1.0"' not in text:
+    text = text.replace(
+        '        _ = mpv_set_option_string(handle, "video-rotate", "no")\n',
+        '        _ = mpv_set_option_string(handle, "video-rotate", "no")\n        _ = mpv_set_option_string(handle, "keepaspect", "yes")\n        _ = mpv_set_option_string(handle, "panscan", "1.0")\n',
+        1,
+    )
 
 # Xcode 16 rejects the old argument order for this SwiftUI frame overload.
 # Keep this repair here because several player-polish scripts can recreate the line.
@@ -35,4 +44,4 @@ player = player.replace(
 )
 player_path.write_text(player, encoding="utf-8")
 
-print("Final player rotation layout and SwiftUI frame normalization applied.")
+print("Final player rotation, video fill, and SwiftUI frame normalization applied.")
