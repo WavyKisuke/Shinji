@@ -30,78 +30,82 @@ struct PlayerView: View {
     @State private var showTrackPicker = false
     @State private var trackPickerType = "audio"
     @State private var availableTracks: [MPVPlayerTrack] = []
+    @State private var showSpeedPicker = false
+    @State private var playbackSpeed = 1.0
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { proxy in
+            let landscape = proxy.size.width > proxy.size.height
             ZStack {
+                Color.black.ignoresSafeArea()
+
                 if let posterURL {
                     AsyncImage(url: posterURL) { phase in
                         if case .success(let image) = phase {
                             image
                                 .resizable()
                                 .scaledToFill()
-                                .blur(radius: 18)
-                                .opacity(0.38)
+                                .blur(radius: landscape ? 24 : 18)
+                                .opacity(0.24)
                         } else {
-                            Color.black.opacity(0.8)
+                            Color.clear
                         }
                     }
                     .ignoresSafeArea()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .zIndex(0)
+                    .clipped()
+                    .allowsHitTesting(false)
                 }
 
-                LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.1), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
-                    .ignoresSafeArea()
-                    .zIndex(0.5)
-
                 playerSurface()
-                    .zIndex(1)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .onTapGesture { toggleControls() }
+                    .zIndex(1)
 
                 if showControls && !controlsLocked {
-                    controlsOverlay()
+                    controlsOverlay(isLandscape: landscape)
                         .zIndex(10)
-                        .allowsHitTesting(true)
                 }
 
                 if controlsLocked && showUnlockButton {
-                    Button {
-                        unlockControls()
-                    } label: {
+                    Button { unlockControls() } label: {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 40, height: 40)
-                            .background(.black.opacity(0.5), in: Circle())
+                            .frame(width: 42, height: 42)
+                            .background(.black.opacity(0.58), in: Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.16), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.top, 16)
-                    .padding(.trailing, 18)
+                    .padding(.top, landscape ? 18 : 52)
+                    .padding(.trailing, landscape ? 22 : 18)
                     .zIndex(20)
                 }
 
                 if isPreparingPlayback && playbackError == nil {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                            .tint(.white)
-                            .scaleEffect(1.15)
+                    VStack(spacing: 10) {
+                        ProgressView().tint(.white)
                         Text("Preparing stream")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.8))
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.78))
                     }
                     .zIndex(30)
                     .allowsHitTesting(false)
                 }
 
                 if let playbackError {
-                    errorOverlay(playbackError)
-                        .zIndex(40)
+                    errorOverlay(playbackError).zIndex(40)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
+            .onChange(of: proxy.size) { newSize in
+                let nowLandscape = newSize.width > newSize.height
+                if nowLandscape != isFullscreen {
+                    isFullscreen = nowLandscape
+                }
+            }
         }
         .background(.black)
         .statusBarHidden(true)
@@ -116,24 +120,35 @@ struct PlayerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
             let orientation = UIDevice.current.orientation
-            if orientation == .landscapeLeft || orientation == .landscapeRight {
+            switch orientation {
+            case .landscapeLeft, .landscapeRight:
                 if !isFullscreen { isFullscreen = true }
-            } else if orientation == .portrait || orientation == .portraitUpsideDown {
+            case .portrait, .portraitUpsideDown:
                 if isFullscreen { isFullscreen = false }
+            default:
+                break
             }
         }
         .onChange(of: isFullscreen) { fullscreen in
             OrientationLockCoordinator.setPlayerFullscreen(fullscreen)
             hideParentTabBar(true)
-            if !controlsLocked {
-                showControls = true
-                scheduleHide()
-            }
+            showControls = true
+            if !controlsLocked { scheduleHide() }
         }
         .sheet(isPresented: $showSettings) {
             PlayerSettingsSheet(sendCommand: sendCommand)
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showSpeedPicker) {
+            PlaybackSpeedSheet(speed: $playbackSpeed) { speed in
+                playbackSpeed = speed
+                sendCommand(["set", "speed", String(speed)])
+                showSpeedPicker = false
+                scheduleHide()
+            }
+            .presentationDetents([.fraction(0.42)])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showTrackPicker) {
             TrackPickerSheet(
@@ -166,7 +181,6 @@ struct PlayerView: View {
             if showUnlockButton { scheduleHide() } else { hideControlsTask?.cancel() }
             return
         }
-
         withAnimation(.easeInOut(duration: 0.18)) { showControls.toggle() }
         if showControls { scheduleHide() } else { hideControlsTask?.cancel() }
     }
@@ -202,9 +216,7 @@ struct PlayerView: View {
             command: command,
             onStatus: { status in
                 playbackDiagnostics = status
-                if status.localizedCaseInsensitiveContains("loaded") {
-                    isPreparingPlayback = false
-                }
+                if status.localizedCaseInsensitiveContains("loaded") { isPreparingPlayback = false }
             },
             onError: { error in
                 playbackError = error
@@ -216,30 +228,27 @@ struct PlayerView: View {
                 isPlaying = !paused
                 if total > 0 { isPreparingPlayback = false }
             },
-            onTracks: { tracks in
-                availableTracks = tracks
-            }
+            onTracks: { tracks in availableTracks = tracks }
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
         .allowsHitTesting(true)
     }
 
-    private func controlsOverlay() -> some View {
+    private func controlsOverlay(isLandscape: Bool) -> some View {
         ZStack {
             LinearGradient(
-                colors: [.black.opacity(0.72), .clear, .clear, .black.opacity(0.82)],
+                colors: [.black.opacity(0.84), .clear, .clear, .black.opacity(0.92)],
                 startPoint: .top,
                 endPoint: .bottom
             )
             .allowsHitTesting(false)
 
             VStack(spacing: 0) {
-                topBar
+                topBar(isLandscape: isLandscape)
                 Spacer(minLength: 0)
-                centerControls
+                centerControls(isLandscape: isLandscape)
                 Spacer(minLength: 0)
-                bottomControls
+                bottomControls(isLandscape: isLandscape)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -248,165 +257,164 @@ struct PlayerView: View {
         .animation(.easeInOut(duration: 0.18), value: showControls)
     }
 
-    private var topBar: some View {
+    private func topBar(isLandscape: Bool) -> some View {
         HStack(spacing: 12) {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 38, height: 38)
-                    .background(.white.opacity(0.07), in: Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
+            playerCircleButton("chevron.down", size: isLandscape ? 38 : 42) { dismiss() }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: isLandscape ? 16 : 18, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                Text(playbackDiagnostics)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close player")
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            if !isFullscreen {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                    Text(playbackDiagnostics)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            Text("HD")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(.white.opacity(0.09), in: Capsule())
+                .overlay(Capsule().stroke(.white.opacity(0.14), lineWidth: 1))
 
-            Spacer(minLength: 0)
+            playerCircleButton(
+                isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                size: isLandscape ? 38 : 42
+            ) { isFullscreen.toggle() }
 
-            HStack(spacing: 8) {
-                Text("HD")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.82))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(.white.opacity(0.08), in: Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
-
-                Button { isFullscreen.toggle() } label: {
-                    Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 38, height: 38)
-                        .background(.white.opacity(0.07), in: Circle())
-                        .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
-
-                Button { lockControls() } label: {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 38, height: 38)
-                        .background(.white.opacity(0.07), in: Circle())
-                        .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Lock controls")
-            }
+            playerCircleButton("lock.fill", size: isLandscape ? 38 : 42) { lockControls() }
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 16)
+        .padding(.horizontal, isLandscape ? 24 : 18)
+        .padding(.top, isLandscape ? 16 : 12)
     }
 
-    private var centerControls: some View {
-        HStack(spacing: 28) {
-            seekButton(seconds: -10)
+    private func centerControls(isLandscape: Bool) -> some View {
+        HStack(spacing: isLandscape ? 30 : 34) {
+            seekButton(seconds: -10, size: isLandscape ? 54 : 62)
 
             Button {
-                sendCommand(["cycle", "pause"])
+                sendCommand(["set", "pause", isPlaying ? "yes" : "no"])
                 scheduleHide()
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 30, weight: .bold))
-                    .frame(width: 72, height: 72)
+                    .font(.system(size: isLandscape ? 28 : 34, weight: .bold))
+                    .frame(width: isLandscape ? 78 : 88, height: isLandscape ? 78 : 88)
                     .foregroundStyle(.white)
-                    .background(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.16), lineWidth: 1.5))
-                    .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 10)
+                    .background(.white.opacity(0.14), in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1.5))
+                    .shadow(color: .black.opacity(0.34), radius: 20, x: 0, y: 10)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
 
-            seekButton(seconds: 10)
+            seekButton(seconds: 10, size: isLandscape ? 54 : 62)
         }
     }
 
-    private var bottomControls: some View {
-        VStack(spacing: 12) {
-            VStack(spacing: 8) {
-                HStack(spacing: 10) {
-                    Text(formatTime(position)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
-                    Slider(
-                        value: Binding(
-                            get: { duration > 0 ? min(position, duration) : 0 },
-                            set: { newValue in
-                                guard duration > 0 else { return }
-                                position = newValue
-                            }
-                        ),
-                        in: 0...max(duration, 1),
-                        onEditingChanged: { editing in
-                            if editing {
-                                isScrubbing = true
-                                hideControlsTask?.cancel()
-                            } else {
-                                if duration > 0 {
-                                    ignorePositionUpdatesUntil = Date().addingTimeInterval(0.7)
-                                    sendCommand(["seek", String(position), "absolute"])
-                                }
-                                isScrubbing = false
-                                scheduleHide()
-                            }
-                        }
-                    )
-                    .tint(.white)
-                    .contentShape(Rectangle())
-                    Text(formatTime(duration)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
-                }
-                .padding(.horizontal, 10)
-            }
-            .padding(.bottom, 2)
-
+    private func bottomControls(isLandscape: Bool) -> some View {
+        VStack(spacing: 8) {
             HStack(spacing: 10) {
-                bottomButton("waveform", "Audio") {
-                    openTrackPicker(for: "audio")
-                    scheduleHide()
-                }
-                bottomButton("captions.bubble", "Subtitles") {
-                    openTrackPicker(for: "sub")
-                    scheduleHide()
-                }
-                bottomButton(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", isMuted ? "Unmute" : "Mute") {
-                    let nextMuted = !isMuted
-                    isMuted = nextMuted
-                    sendCommand(["set", "mute", nextMuted ? "yes" : "no"])
-                    scheduleHide()
-                }
-                bottomButton("gearshape", "Settings") { showSettings = true }
-                Spacer(minLength: 0)
-                Text("nuvio")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.black.opacity(0.2), in: Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
+                Text(formatTime(position))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.82))
+
+                Slider(
+                    value: Binding(
+                        get: { duration > 0 ? min(position, duration) : 0 },
+                        set: { position = max(0, $0) }
+                    ),
+                    in: 0...max(duration, 1),
+                    onEditingChanged: { editing in
+                        if editing {
+                            isScrubbing = true
+                            hideControlsTask?.cancel()
+                        } else {
+                            if duration > 0 {
+                                ignorePositionUpdatesUntil = Date().addingTimeInterval(0.7)
+                                sendCommand(["seek", String(position), "absolute"])
+                            }
+                            isScrubbing = false
+                            scheduleHide()
+                        }
+                    }
+                )
+                .tint(.white)
+
+                Text(formatTime(duration))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.82))
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 16)
+            .padding(.horizontal, isLandscape ? 24 : 14)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    playerAction("waveform", "Audio") {
+                        openTrackPicker(for: "audio")
+                        scheduleHide()
+                    }
+                    playerAction("captions.bubble", "Subtitles") {
+                        openTrackPicker(for: "sub")
+                        scheduleHide()
+                    }
+                    playerAction("speedometer", String(format: "%.2gx", playbackSpeed)) {
+                        showSpeedPicker = true
+                        hideControlsTask?.cancel()
+                    }
+                    playerAction(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", "Mute") {
+                        let nextMuted = !isMuted
+                        isMuted = nextMuted
+                        sendCommand(["set", "mute", nextMuted ? "yes" : "no"])
+                        scheduleHide()
+                    }
+                    playerAction("gearshape.fill", "Settings") {
+                        showSettings = true
+                        hideControlsTask?.cancel()
+                    }
+                    playerAction("lock.fill", "Lock") { lockControls() }
+                }
+                .padding(.horizontal, isLandscape ? 24 : 18)
+                .padding(.bottom, isLandscape ? 12 : 18)
+            }
         }
         .padding(.top, 8)
         .background(
             LinearGradient(
-                colors: [.black.opacity(0.0), .black.opacity(0.08), .black.opacity(0.18), .black.opacity(0.28)],
+                colors: [.clear, .black.opacity(0.16), .black.opacity(0.38)],
                 startPoint: .top,
                 endPoint: .bottom
             )
         )
     }
 
-    private func seekButton(seconds: Int) -> some View {
+    private func playerCircleButton(_ icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: size, height: size)
+                .background(.white.opacity(0.07), in: Circle())
+                .overlay(Circle().stroke(.white.opacity(0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func playerAction(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: icon).font(.system(size: 14, weight: .medium))
+                Text(label).font(.system(size: 11, weight: .semibold, design: .rounded))
+            }
+            .foregroundStyle(.white.opacity(0.94))
+            .padding(.horizontal, 13)
+            .frame(height: 40)
+            .background(.white.opacity(0.075), in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.11), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func seekButton(seconds: Int, size: CGFloat) -> some View {
         Button {
             sendCommand(["seek", String(seconds), "relative"])
             if duration > 0 {
@@ -417,32 +425,16 @@ struct PlayerView: View {
         } label: {
             ZStack {
                 Image(systemName: seconds < 0 ? "gobackward" : "goforward")
-                    .font(.system(size: 22, weight: .semibold))
-                Text("10").font(.system(size: 8, weight: .bold)).offset(y: 1)
+                    .font(.system(size: 21, weight: .semibold))
+                Text("10")
+                    .font(.system(size: 8, weight: .bold))
+                    .offset(y: 1)
             }
-            .frame(width: 58, height: 58)
-            .background(.white.opacity(0.06), in: Circle())
-            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
-            .contentShape(Circle())
+            .frame(width: size, height: size)
+            .background(.white.opacity(0.07), in: Circle())
+            .overlay(Circle().stroke(.white.opacity(0.12), lineWidth: 1))
         }
         .buttonStyle(.plain)
-    }
-
-    private func bottomButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
-                Text(label)
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(.white.opacity(0.92))
-            .frame(width: 56, height: 46)
-            .background(.white.opacity(0.04), in: Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 
     private func errorOverlay(_ message: String) -> some View {
@@ -450,7 +442,8 @@ struct PlayerView: View {
             Image(systemName: "exclamationmark.triangle.fill").font(.title)
             Text("Couldn't play this stream").font(.headline)
             Text(message).font(.footnote).foregroundStyle(.white.opacity(0.72)).multilineTextAlignment(.center)
-            Button("Try Again") { startInternalPlayback(reloadStream: true) }.buttonStyle(.borderedProminent)
+            Button("Try Again") { startInternalPlayback(reloadStream: true) }
+                .buttonStyle(.borderedProminent)
         }
         .foregroundStyle(.white)
         .padding(28)
@@ -546,6 +539,33 @@ private struct PlayerSettingsSheet: View {
     }
 }
 
+private struct PlaybackSpeedSheet: View {
+    @Binding var speed: Double
+    let onSelect: (Double) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private let speeds: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+
+    var body: some View {
+        NavigationStack {
+            List(speeds, id: \.self) { value in
+                Button {
+                    speed = value
+                    onSelect(value)
+                } label: {
+                    HStack {
+                        Text(String(format: "%.2gx", value))
+                        Spacer()
+                        if abs(speed - value) < 0.001 { Image(systemName: "checkmark") }
+                    }
+                }
+            }
+            .navigationTitle("Playback Speed")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
 private struct TrackPickerSheet: View {
     let type: String
     let tracks: [MPVPlayerTrack]
@@ -556,10 +576,8 @@ private struct TrackPickerSheet: View {
         NavigationStack {
             List {
                 if tracks.isEmpty {
-                    Section {
-                        Text(type == "audio" ? "No audio tracks are available for this stream." : "No subtitle tracks are available for this stream.")
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(type == "audio" ? "No audio tracks are available for this stream." : "No subtitle tracks are available for this stream.")
+                        .foregroundStyle(.secondary)
                 } else {
                     ForEach(tracks) { track in
                         Button {
@@ -569,29 +587,19 @@ private struct TrackPickerSheet: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(track.title.isEmpty ? (track.language.isEmpty ? "Track \(track.id)" : track.language.uppercased()) : track.title)
-                                        .font(.body)
                                     if !track.language.isEmpty {
-                                        Text(track.language.uppercased())
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                        Text(track.language.uppercased()).font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
                                 Spacer()
-                                if track.isSelected {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.blue)
-                                }
+                                if track.isSelected { Image(systemName: "checkmark").foregroundStyle(.blue) }
                             }
                         }
                     }
                 }
             }
             .navigationTitle(type == "audio" ? "Audio Tracks" : "Subtitle Tracks")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }
 }
