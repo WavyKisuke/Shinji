@@ -3,10 +3,8 @@ from pathlib import Path
 player_path = Path("Shinji/Views/PlayerView.swift")
 p = player_path.read_text(encoding="utf-8")
 
-# Use direct pause state instead of cycling it.
 p = p.replace('sendCommand(["cycle", "pause"])', 'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])')
 
-# Real Nuvio-style audio/subtitle selection state.
 if "@State private var showAudioPicker = false" not in p:
     p = p.replace(
         "    @State private var showSettings = false\n",
@@ -19,13 +17,11 @@ if "@State private var showAudioPicker = false" not in p:
     @State private var selectedSubtitleTrackID: Int?
 """, 1)
 
-# Replace blind cycling with pickers.
 p = p.replace('sendCommand(["cycle", "audio"])', 'showAudioPicker = true')
 p = p.replace('sendCommand(["cycle", "aid"])', 'showAudioPicker = true')
 p = p.replace('sendCommand(["cycle", "sub"])', 'showSubtitlePicker = true')
 p = p.replace('sendCommand(["cycle", "sid"])', 'showSubtitlePicker = true')
 
-# Receive the MPV track list.
 anchor = '''            onPlaybackUpdate: { time, total, paused in
                 // Don't let mpv's position fight the slider while scrubbing or just after a seek.
                 if !isScrubbing && Date() >= ignorePositionUpdatesUntil { position = time }
@@ -44,7 +40,6 @@ if anchor in p and "onTracks: { tracks in" not in p:
             }
 ''', 1)
 
-# Insert the track rails before the settings sheet.
 marker = '''        .sheet(isPresented: $showSettings) {
             PlayerSettingsSheet(sendCommand: sendCommand)
                 .presentationDetents([.medium])
@@ -91,7 +86,6 @@ if marker in p and ".fullScreenCover(isPresented: $showAudioPicker)" not in p:
 
 player_path.write_text(p, encoding="utf-8")
 
-# MPV bridge: expose track-list metadata and selected IDs.
 mpv_path = Path("Shinji/Views/MPVPlayerSurface.swift")
 m = mpv_path.read_text(encoding="utf-8")
 
@@ -108,7 +102,7 @@ if "var onTracks: ([MPVPlayerTrack]) -> Void" not in m:
     model = '''struct MPVPlayerTrack: Identifiable, Hashable {
     let id: Int
     let title: String
-    let language: String?
+    let language: String
     let type: String
     let isSelected: Bool
 }
@@ -125,9 +119,9 @@ if "var onTracks: ([MPVPlayerTrack]) -> Void" not in m:
             guard let type = stringProperty(handle, "\\(prefix)/type"), type == "audio" || type == "sub" else { continue }
             let id = intProperty(handle, "\\(prefix)/id") ?? (index + 1)
             let title = stringProperty(handle, "\\(prefix)/title") ?? ""
-            let language = stringProperty(handle, "\\(prefix)/lang")
+            let language = stringProperty(handle, "\\(prefix)/lang") ?? ""
             let selected = intProperty(handle, type == "audio" ? "aid" : "sid") == id
-            tracks.append(MPVPlayerTrack(id: id, title: title, language: language, type: type, isSelected: selected))
+            tracks.append(MPVPlayerTrack(id: id, title: title, language: language, type: type, isSelected: selected)
         }
         DispatchQueue.main.async { [weak self] in self?.onTracks?(tracks) }
     }
@@ -147,5 +141,9 @@ if "var onTracks: ([MPVPlayerTrack]) -> Void" not in m:
 
 '''
     m = m.replace('    private func publishPlaybackState(_ handle: OpaquePointer) {', methods + '    private func publishPlaybackState(_ handle: OpaquePointer) {', 1)
+
+# Keep the generated model compatible with the picker: language is always a displayable string.
+m = m.replace('let language: String?\n', 'let language: String\n')
+m = m.replace('let language = stringProperty(handle, "\\(prefix)/lang")\n', 'let language = stringProperty(handle, "\\(prefix)/lang") ?? ""\n')
 
 mpv_path.write_text(m, encoding="utf-8")
