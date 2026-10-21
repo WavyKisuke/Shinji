@@ -5,6 +5,9 @@ struct PlayerView: View {
     let url: URL
     let title: String
     var headers: [String: String] = [:]
+    var posterURL: URL? = nil
+    var addonAudioTracks: [AddonExternalTrack] = []
+    var addonSubtitleTracks: [AddonExternalTrack] = []
 
     @Environment(\.dismiss) private var dismiss
     @State private var isMuted = false
@@ -24,6 +27,9 @@ struct PlayerView: View {
     @State private var isScrubbing = false
     @State private var ignorePositionUpdatesUntil = Date.distantPast
     @State private var showSettings = false
+    @State private var showTrackPicker = false
+    @State private var trackPickerType = "audio"
+    @State private var availableTracks: [MPVPlayerTrack] = []
 
     var body: some View {
         GeometryReader { _ in
@@ -103,12 +109,28 @@ struct PlayerView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showTrackPicker) {
+            TrackPickerSheet(
+                type: trackPickerType,
+                tracks: trackOptionsForPicker,
+                onSelect: { track in
+                    guard !track.title.isEmpty || !track.language.isEmpty else { return }
+                    let propertyName = trackPickerType == "audio" ? "aid" : "sid"
+                    sendCommand(["set", propertyName, String(track.id)])
+                    showTrackPicker = false
+                }
+            )
+        }
         .onDisappear {
             hideControlsTask?.cancel()
             UIDevice.current.endGeneratingDeviceOrientationNotifications()
             OrientationLockCoordinator.setPlayerFullscreen(false)
             hideParentTabBar(false)
         }
+    }
+
+    private var trackOptionsForPicker: [MPVPlayerTrack] {
+        availableTracks.filter { $0.type == trackPickerType }
     }
 
     private func toggleControls() {
@@ -141,6 +163,11 @@ struct PlayerView: View {
         scheduleHide()
     }
 
+    private func openTrackPicker(for type: String) {
+        trackPickerType = type
+        showTrackPicker = true
+    }
+
     private func playerSurface() -> some View {
         MPVPlayerSurface(
             url: url,
@@ -159,11 +186,13 @@ struct PlayerView: View {
                 isPreparingPlayback = false
             },
             onPlaybackUpdate: { time, total, paused in
-                // Don't let mpv's position fight the slider while scrubbing or just after a seek.
                 if !isScrubbing && Date() >= ignorePositionUpdatesUntil { position = time }
                 duration = total
                 isPlaying = !paused
                 if total > 0 { isPreparingPlayback = false }
+            },
+            onTracks: { tracks in
+                availableTracks = tracks
             }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -278,7 +307,6 @@ struct PlayerView: View {
                             isScrubbing = true
                             hideControlsTask?.cancel()
                         } else {
-                            // Seek once on release instead of flooding mpv on every drag tick.
                             if duration > 0 {
                                 ignorePositionUpdatesUntil = Date().addingTimeInterval(0.7)
                                 sendCommand(["seek", String(position), "absolute"])
@@ -295,11 +323,11 @@ struct PlayerView: View {
 
             HStack(spacing: 22) {
                 bottomButton("waveform", "Audio") {
-                    sendCommand(["cycle", "audio"])
+                    openTrackPicker(for: "audio")
                     scheduleHide()
                 }
                 bottomButton("captions.bubble", "Subtitles") {
-                    sendCommand(["cycle", "sub"])
+                    openTrackPicker(for: "sub")
                     scheduleHide()
                 }
                 bottomButton(isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill", isMuted ? "Unmute" : "Mute") {
@@ -373,6 +401,7 @@ struct PlayerView: View {
         controlsLocked = false
         showUnlockButton = false
         isScrubbing = false
+        availableTracks = []
         if reloadStream {
             sendCommand(["loadfile", url.absoluteString, "replace"])
         } else {
@@ -445,6 +474,56 @@ private struct PlayerSettingsSheet: View {
             }
             .navigationTitle("Player Settings")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+}
+
+private struct TrackPickerSheet: View {
+    let type: String
+    let tracks: [MPVPlayerTrack]
+    let onSelect: (MPVPlayerTrack) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if tracks.isEmpty {
+                    Section {
+                        Text(type == "audio" ? "No audio tracks are available for this stream." : "No subtitle tracks are available for this stream.")
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(tracks) { track in
+                        Button {
+                            onSelect(track)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(track.title.isEmpty ? (track.language.isEmpty ? "Track \(track.id)" : track.language.uppercased()) : track.title)
+                                        .font(.body)
+                                    if !track.language.isEmpty {
+                                        Text(track.language.uppercased())
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if track.isSelected {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.blue)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(type == "audio" ? "Audio Tracks" : "Subtitle Tracks")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
