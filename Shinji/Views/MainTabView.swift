@@ -10,7 +10,7 @@ struct MainTabView: View {
                 case 0:
                     HomeLibraryView()
                 case 1:
-                    LibraryView(kind: .movies)
+                    SearchView()
                 case 2:
                     UnifiedLibraryView(kind: .all)
                 default:
@@ -47,16 +47,16 @@ struct MainTabView: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 21, weight: .semibold))
                 Text(title)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
             }
-            .foregroundStyle(selectedTab == index ? .white : .white.opacity(0.68))
+            .foregroundStyle(selectedTab == index ? .white : .white.opacity(0.62))
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background {
                 if selectedTab == index {
-                    Capsule().fill(Color.white.opacity(0.10))
+                    Capsule().fill(Color.white.opacity(0.11))
                 }
             }
         }
