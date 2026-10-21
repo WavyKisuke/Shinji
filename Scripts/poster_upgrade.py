@@ -51,9 +51,19 @@ replace_once(
     '                    PlayerView(url: url, title: entry.title, headers: entry.headers)\n',
     '                    PlayerView(url: url, title: entry.title, headers: entry.headers, posterURL: entry.posterURL.flatMap(URL.init(string:)))\n',
 )
-old_card = '''                    RoundedRectangle(cornerRadius: 18)\n                        .fill(Color.white.opacity(0.08))\n                        .overlay(Image(systemName: "play.rectangle.fill")\n                            .font(.system(size: 34))\n                            .foregroundStyle(.white.opacity(0.55)))\n'''
-new_card = '''                    RoundedRectangle(cornerRadius: 18)\n                        .fill(Color.white.opacity(0.08))\n                    if let rawPoster = entry.posterURL, let poster = URL(string: rawPoster) {\n                        AsyncImage(url: poster) { phase in\n                            if case .success(let image) = phase {\n                                image.resizable().scaledToFill()\n                            } else {\n                                Image(systemName: "play.rectangle.fill")\n                                    .font(.system(size: 34))\n                                    .foregroundStyle(.white.opacity(0.55))\n                            }\n                        }\n                    } else {\n                        Image(systemName: "play.rectangle.fill")\n                            .font(.system(size: 34))\n                            .foregroundStyle(.white.opacity(0.55))\n                    }\n'''
-replace_once(home, old_card, new_card)
-Path(home).write_text(Path(home).read_text(encoding="utf-8"), encoding="utf-8")
+# Keep hero artwork separate from the first Popular Movies posters so the hero
+# feels like a rotating featured area rather than a duplicate shelf.
+replace_once(
+    home,
+    '    private var heroItems: [AddonCatalogItem] { Array((movies + series).prefix(6)) }',
+    '    private var heroItems: [AddonCatalogItem] { Array((movies.dropFirst(min(6, movies.count)) + series).prefix(6)) }',
+)
+text = Path(home).read_text(encoding="utf-8")
+text = text.replace(
+    '.onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect())',
+    '.onReceive(Timer.publish(every: 4, on: .main, in: .common).autoconnect())',
+    1,
+)
+Path(home).write_text(text, encoding="utf-8")
 
-print("Keep Watching poster upgrade applied.")
+print("Keep Watching poster upgrade and distinct rotating hero applied.")
