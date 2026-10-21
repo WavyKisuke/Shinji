@@ -76,6 +76,9 @@ jobs:
       - name: Add Keep Watching poster support
         run: python3 Scripts/poster_upgrade.py
 
+      - name: Repair iOS 16 compatibility
+        run: python3 Scripts/fix_ios16_compatibility.py
+
       - name: Build app for device without signing
         run: |
           set -euo pipefail
