@@ -14,7 +14,7 @@ struct MainTabView: View {
                 case 2:
                     UnifiedLibraryView(kind: .all)
                 default:
-                    SettingsView()
+                    ProfileHubView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
