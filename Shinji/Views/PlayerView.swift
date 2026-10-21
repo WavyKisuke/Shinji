@@ -34,8 +34,26 @@ struct PlayerView: View {
     var body: some View {
         GeometryReader { _ in
             ZStack {
-                playerSurface()
+                if let posterURL {
+                    AsyncImage(url: posterURL) { phase in
+                        if case .success(let image) = phase {
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .blur(radius: 18)
+                                .opacity(0.48)
+                        } else {
+                            Color.black
+                                .opacity(0.8)
+                        }
+                    }
+                    .ignoresSafeArea()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .zIndex(0)
+                }
+
+                playerSurface()
+                    .zIndex(1)
                     .contentShape(Rectangle())
                     .onTapGesture { toggleControls() }
 
@@ -63,11 +81,16 @@ struct PlayerView: View {
                 }
 
                 if isPreparingPlayback && playbackError == nil {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(1.15)
-                        .zIndex(30)
-                        .allowsHitTesting(false)
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(1.2)
+                        Text("Preparing stream")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                    .zIndex(30)
+                    .allowsHitTesting(false)
                 }
 
                 if let playbackError {
@@ -202,7 +225,7 @@ struct PlayerView: View {
     private func controlsOverlay() -> some View {
         ZStack {
             LinearGradient(
-                colors: [.black.opacity(0.62), .clear, .clear, .black.opacity(0.84)],
+                colors: [.black.opacity(0.68), .clear, .black.opacity(0.8)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -249,6 +272,14 @@ struct PlayerView: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 8) {
+                Text("HD")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.09), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+
                 Button { isFullscreen.toggle() } label: {
                     Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 16, weight: .semibold))
@@ -273,7 +304,7 @@ struct PlayerView: View {
     }
 
     private var centerControls: some View {
-        HStack(spacing: 30) {
+        HStack(spacing: 32) {
             seekButton(seconds: -10)
 
             Button {
@@ -282,17 +313,17 @@ struct PlayerView: View {
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 30, weight: .bold))
-                    .frame(width: 70, height: 70)
+                    .frame(width: 72, height: 72)
                     .foregroundStyle(.white)
                     .background(.black.opacity(0.28), in: Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                    .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 8)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
 
             seekButton(seconds: 10)
         }
-        .shadow(color: .black.opacity(0.24), radius: 14, x: 0, y: 6)
     }
 
     private var bottomControls: some View {
@@ -367,12 +398,12 @@ struct PlayerView: View {
         } label: {
             ZStack {
                 Image(systemName: seconds < 0 ? "gobackward" : "goforward")
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                 Text("10").font(.system(size: 8, weight: .bold)).offset(y: 1)
             }
             .frame(width: 58, height: 58)
             .background(.black.opacity(0.3), in: Circle())
-            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -389,6 +420,7 @@ struct PlayerView: View {
             .foregroundStyle(.white.opacity(0.9))
             .frame(width: 56, height: 46)
             .background(.black.opacity(0.28), in: Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
