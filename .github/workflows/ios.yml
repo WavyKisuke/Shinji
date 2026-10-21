@@ -61,6 +61,9 @@ jobs:
       - name: Ensure MPV track bridge
         run: python3 Scripts/fix_mpv_tracks.py
 
+      - name: Finalize working audio and subtitle pickers
+        run: python3 Scripts/finalize_track_picker.py
+
       - name: Ensure catalog metadata model
         run: python3 Scripts/fix_catalog_metadata.py
 
