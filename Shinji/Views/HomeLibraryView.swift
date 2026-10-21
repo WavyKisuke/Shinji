@@ -20,7 +20,7 @@ struct HomeLibraryView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 34) {
+                LazyVStack(alignment: .leading, spacing: 30) {
                     heroSection
                     keepWatchingSection // keep Home focused on playback history
                     catalogSection(title: "Popular - Movies", items: popularMovies)
@@ -57,15 +57,15 @@ struct HomeLibraryView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 365)
+            .frame(height: 315)
             .overlay(alignment: .bottom) {
                 HStack(spacing: 7) {
                     ForEach(0..<heroItems.count, id: \.self) { index in
                         Capsule().fill(index == heroIndex ? Color.white : Color.white.opacity(0.72))
-                            .frame(width: index == heroIndex ? 52 : 8, height: 6)
+                            .frame(width: index == heroIndex ? 46 : 8, height: 5)
                     }
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, 14)
             }
         }
     }
@@ -85,21 +85,21 @@ struct HomeLibraryView: View {
                 .init(color: .black.opacity(0.94), location: 1)
             ], startPoint: .top, endPoint: .bottom)
             LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.72)], startPoint: .leading, endPoint: .trailing)
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 Text("\(item.type.capitalized)  •  \(item.year ?? "")")
-                    .font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                    .font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(.white)
                 Text("View Details")
-                    .font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(.black)
-                    .padding(.horizontal, 35).frame(height: 48).background(.white, in: Capsule())
+                    .font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(.black)
+                    .padding(.horizontal, 31).frame(height: 44).background(.white, in: Capsule())
             }
-            .padding(.bottom, 34)
+            .padding(.bottom, 28)
         }
         .clipped()
     }
 
     private func heroPlaceholder(_ item: AddonCatalogItem) -> some View {
         LinearGradient(colors: [Color(hex: glowHex), .black], startPoint: .topLeading, endPoint: .bottomTrailing)
-            .overlay { Text(item.name).font(.system(size: 40, weight: .black, design: .rounded)).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center).padding() }
+            .overlay { Text(item.name).font(.system(size: 36, weight: .black, design: .rounded)).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center).padding() }
     }
 
     @ViewBuilder
@@ -108,7 +108,7 @@ struct HomeLibraryView: View {
             VStack(alignment: .leading, spacing: 14) {
                 sectionTitle("Continue Watching", showArrow: false)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) { ForEach(continueStore.items) { entry in continueCard(entry) } }
+                    HStack(spacing: 14) { ForEach(continueStore.items) { entry in continueCard(entry) } }
                         .padding(.horizontal, 26)
                 }
             }
@@ -182,22 +182,22 @@ struct HomeLibraryView: View {
             selectedEntry = entry; showPlayer = true
         } label: {
             ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.08))
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.08))
                 if let rawPoster = entry.posterURL, let poster = URL(string: rawPoster) {
                     AsyncImage(url: poster) { phase in
-                        if case .success(let image) = phase { image.resizable().scaledToFill() } else { Color.white.opacity(0.06) }
+                        if case .success(let image) in phase { image.resizable().scaledToFill() } else { Color.white.opacity(0.06) }
                     }
                 }
                 LinearGradient(colors: [.clear, .black.opacity(0.92)], startPoint: .center, endPoint: .bottom)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(entry.title).font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-                    Text(remainingText(entry)).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.72))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(entry.title).font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
+                    Text(remainingText(entry)).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.72))
                     GeometryReader { geo in
                         Capsule().fill(Color.white.opacity(0.22)).overlay(alignment: .leading) { Capsule().fill(.white).frame(width: geo.size.width * progress) }
-                    }.frame(height: 4)
-                }.padding(16)
+                    }.frame(height: 3)
+                }.padding(13)
             }
-            .frame(width: 310, height: 174).clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frame(width: 255, height: 143).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }.buttonStyle(.plain)
     }
 
