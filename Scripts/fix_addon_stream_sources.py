@@ -1,16 +1,14 @@
 from pathlib import Path
+import re
 
 path = Path("Shinji/Services/AddonStore.swift")
 text = path.read_text(encoding="utf-8")
 
-# Ensure the external-track model exists without depending on an exact prior block.
 if "struct AddonExternalTrack: Identifiable, Hashable" not in text:
     anchor = "struct AddonStreamOption: Identifiable, Hashable {"
     if anchor not in text:
         raise SystemExit("AddonStreamOption model not found")
-    text = text.replace(
-        anchor,
-        '''struct AddonExternalTrack: Identifiable, Hashable {
+    text = text.replace(anchor, '''struct AddonExternalTrack: Identifiable, Hashable {
     let id: String
     let title: String
     let language: String
@@ -18,32 +16,30 @@ if "struct AddonExternalTrack: Identifiable, Hashable" not in text:
     let headers: [String: String]
 }
 
-struct AddonStreamOption: Identifiable, Hashable {''',
-        1,
-    )
+struct AddonStreamOption: Identifiable, Hashable {''', 1)
 
-# Add track arrays to AddonStreamOption if they are missing.
 if "let audioTracks: [AddonExternalTrack]" not in text:
     marker = "    let headers: [String: String]\n}"
-    replacement = "    let headers: [String: String]\n    let audioTracks: [AddonExternalTrack]\n    let subtitles: [AddonExternalTrack]\n}"
     if marker not in text:
         raise SystemExit("AddonStreamOption fields not found")
-    text = text.replace(marker, replacement, 1)
+    text = text.replace(marker, "    let headers: [String: String]\n    let audioTracks: [AddonExternalTrack]\n    let subtitles: [AddonExternalTrack]\n}", 1)
 
-# Locate the actual stream append call and inject parsed external tracks.
-if "audioTracks: audioTracks" not in text:
-    needle = "                                headers: suppliedHeaders\n                            ))"
-    if needle not in text:
-        needle = "                                headers: suppliedHeaders\n                            ))\n"
-    if needle not in text:
+if "audioTracks: parseExternalTracks" not in text:
+    pattern = r'''(?P<indent>\s*)found\.append\(AddonStreamOption\(\s*id: optionID,\s*title: "\\\(streamTitle\) · \\\(addon\.name\)",\s*url: parsedURL,\s*headers: suppliedHeaders\s*\)\)'''
+    match = re.search(pattern, text)
+    if not match:
         raise SystemExit("stream construction block not found")
-    replacement = """                                headers: suppliedHeaders,
-                                audioTracks: parseExternalTracks(stream[\"audioTracks\"], fallbackHeaders: suppliedHeaders, prefix: \"audio\"),
-                                subtitles: parseExternalTracks(stream[\"subtitles\"], fallbackHeaders: suppliedHeaders, prefix: \"sub\")
-                            ))"""
-    text = text.replace(needle, replacement, 1)
+    indent = match.group("indent")
+    replacement = f'''{indent}found.append(AddonStreamOption(
+{indent}    id: optionID,
+{indent}    title: "\\(streamTitle) · \\(addon.name)",
+{indent}    url: parsedURL,
+{indent}    headers: suppliedHeaders,
+{indent}    audioTracks: parseExternalTracks(stream["audioTracks"], fallbackHeaders: suppliedHeaders, prefix: "audio"),
+{indent}    subtitles: parseExternalTracks(stream["subtitles"], fallbackHeaders: suppliedHeaders, prefix: "sub")
+{indent}))'''
+    text = text[:match.start()] + replacement + text[match.end():]
 
-# Add the parser immediately before stringDictionary.
 if "private func parseExternalTracks" not in text:
     marker = "    private func stringDictionary(_ value: Any?) -> [String: String]? {"
     if marker not in text:
