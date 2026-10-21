@@ -12,7 +12,7 @@ text = text.replace(
 )
 
 old_layout = '''        CATransaction.begin()\n        CATransaction.setDisableActions(true)\n        metalLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)\n        metalLayer.bounds = CGRect(origin: .zero, size: bounds.size)\n        metalLayer.contentsScale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale\n        let scale = metalLayer.contentsScale\n        metalLayer.drawableSize = CGSize(\n            width: max(1, bounds.width * scale),\n            height: max(1, bounds.height * scale)\n        )\n        CATransaction.commit()\n'''
-new_layout = '''        CATransaction.begin()\n        CATransaction.setDisableActions(true)\n        metalLayer.frame = bounds\n        metalLayer.contentsScale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale\n        let scale = metalLayer.contentsScale\n        metalLayer.drawableSize = CGSize(\n            width: max(1, bounds.width * scale),\n            height: max(1, bounds.height * scale)\n        )\n        CATransaction.commit()\n'''
+new_layout = '''        CATransaction.begin()\n        CATransaction.setDisableActions(true)\n        metalLayer.frame = bounds\n        metalLayer.contentsScale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale\n        let scale = metalLayer.contentsScale\n        metalLayer.drawableSize = CGSize(\n            width: max(1, bounds.width * scale),\n            height: max(1, bounds.height * scale)\n        )\n        CATransaction.commit()\n\n        let landscape = bounds.width > bounds.height\n        guard landscape != lastPanscanLandscape else { return }\n        lastPanscanLandscape = landscape\n        mpvQueue.async { [weak self] in\n            guard let self, let handle = self.activeHandle() else { return }\n            self.execute(["set", "panscan", landscape ? "1" : "0"], on: handle)\n            self.execute(["set", "video-pan-x", "0"], on: handle)\n            self.execute(["set", "video-pan-y", "0"], on: handle)\n        }\n'''
 if old_layout in text:
     text = text.replace(old_layout, new_layout, 1)
 
@@ -23,14 +23,17 @@ if "metalLayer.needsDisplayOnBoundsChange" not in text:
         1,
     )
 
-# Fill the landscape player without stretching the movie. MPV normally
-# preserves the source aspect ratio and adds black bars when it differs from
-# the player surface. Panscan crops only the excess edges so the video fills
-# the entire fullscreen surface while remaining proportional.
-if '"panscan", "1.0"' not in text:
+# Keep aspect ratio while using dynamic pan-and-scan only in landscape.
+if '"panscan", "1.0"' in text:
+    text = text.replace(
+        '        _ = mpv_set_option_string(handle, "panscan", "1.0")\n',
+        '        _ = mpv_set_option_string(handle, "keepaspect", "yes")\n',
+        1,
+    )
+elif '"keepaspect", "yes"' not in text:
     text = text.replace(
         '        _ = mpv_set_option_string(handle, "video-rotate", "no")\n',
-        '        _ = mpv_set_option_string(handle, "video-rotate", "no")\n        _ = mpv_set_option_string(handle, "keepaspect", "yes")\n        _ = mpv_set_option_string(handle, "panscan", "1.0")\n',
+        '        _ = mpv_set_option_string(handle, "video-rotate", "no")\n        _ = mpv_set_option_string(handle, "keepaspect", "yes")\n',
         1,
     )
 
@@ -44,4 +47,4 @@ player = player.replace(
 )
 player_path.write_text(player, encoding="utf-8")
 
-print("Final player rotation, video fill, and SwiftUI frame normalization applied.")
+print("Final player rotation, dynamic landscape video fill, and SwiftUI frame normalization applied.")
