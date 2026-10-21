@@ -109,7 +109,7 @@ final class OrientationLockCoordinator {
             let target: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
             let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: target)
             windowScene.requestGeometryUpdate(preferences) { error in
-                if let error { print("[OrientationLockCoordinator] Geometry update: \(error.localizedDescription)") }
+                print("[OrientationLockCoordinator] Geometry update: \(error.localizedDescription)")
             }
         }
 
