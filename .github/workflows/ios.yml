@@ -47,9 +47,11 @@ jobs:
       - name: Apply final Nuvio player implementation
         run: python3 Scripts/fix_nuvio_player.py
 
+      - name: Optimize artwork loading and catalog rendering
+        run: python3 Scripts/optimize_loading.py
+
       - name: Finalize Nuvio MPV track commands
         run: |
-          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           for name in ["Shinji/Views/PlayerView.swift", "Shinji/Views/MPVPlayerSurface.swift"]:
