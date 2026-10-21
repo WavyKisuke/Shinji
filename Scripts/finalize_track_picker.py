@@ -3,7 +3,14 @@ from pathlib import Path
 path = Path("Shinji/Views/PlayerView.swift")
 p = path.read_text(encoding="utf-8")
 
-# State required by the real track picker.
+# Player receives the exact track URLs returned by the installed Stremio add-on.
+if "var addonAudioTracks: [AddonExternalTrack] = []" not in p:
+    p = p.replace(
+        "    var headers: [String: String] = [:]\n",
+        "    var headers: [String: String] = [:]\n    var posterURL: URL? = nil\n    var addonAudioTracks: [AddonExternalTrack] = []\n    var addonSubtitleTracks: [AddonExternalTrack] = []\n",
+        1,
+    )
+
 state_anchor = '    @State private var showSettings = false\n'
 state_block = '''    @State private var showSettings = false
     @State private var showAudioPicker = false
@@ -16,13 +23,11 @@ state_block = '''    @State private var showSettings = false
 if 'showAudioPicker' not in p and state_anchor in p:
     p = p.replace(state_anchor, state_block, 1)
 
-# Buttons must open a picker; cycling cannot show a selectable list.
 p = p.replace('sendCommand(["cycle", "audio"])', 'showAudioPicker = true')
 p = p.replace('sendCommand(["cycle", "aid"])', 'showAudioPicker = true')
 p = p.replace('sendCommand(["cycle", "sub"])', 'showSubtitlePicker = true')
 p = p.replace('sendCommand(["cycle", "sid"])', 'showSubtitlePicker = true')
 
-# Feed MPV's actual track list into SwiftUI state.
 anchor = '''            onPlaybackUpdate: { time, total, paused in
                 // Don't let mpv's position fight the slider while scrubbing or just after a seek.
                 if !isScrubbing && Date() >= ignorePositionUpdatesUntil { position = time }
@@ -43,12 +48,13 @@ track_callback = '''            onPlaybackUpdate: { time, total, paused in
                 subtitleTracks = tracks.filter { $0.type == "sub" }
                 selectedAudioTrackID = tracks.first(where: { $0.type == "audio" && $0.isSelected })?.id
                 selectedSubtitleTrackID = tracks.first(where: { $0.type == "sub" && $0.isSelected })?.id
-            }
+            },
+            addonAudioTracks: addonAudioTracks,
+            addonSubtitleTracks: addonSubtitleTracks
 '''
 if 'onTracks: { tracks in' not in p and anchor in p:
     p = p.replace(anchor, track_callback, 1)
 
-# Add the full-screen Nuvio-style pickers once.
 sheet_anchor = '''        .sheet(isPresented: $showSettings) {
             PlayerSettingsSheet(sendCommand: sendCommand)
                 .presentationDetents([.medium])
