@@ -23,4 +23,59 @@ if legacy_marker in text and end_marker in text:
     end = text.index(end_marker, start)
     text = text[:start] + text[end:]
 
+# Add a confirmation alert so a long-press on Continue Watching can remove an item
+# without accidentally affecting the user's Library/favorites.
+if '@State private var entryToDelete: ContinueWatchingItem?' not in text:
+    text = text.replace(
+        '    @State private var showPlayer = false\n',
+        '    @State private var showPlayer = false\n    @State private var entryToDelete: ContinueWatchingItem?\n    @State private var showDeleteConfirmation = false\n',
+        1,
+    )
+
+alert_marker = '''            .navigationDestination(isPresented: $showPlayer) {
+                if let entry = selectedEntry, let url = URL(string: entry.url) {
+                    PlayerView(url: url, title: entry.title, headers: entry.headers, posterURL: entry.posterURL.flatMap(URL.init(string:)))
+                }
+            }
+'''
+if 'Remove from Continue Watching?' not in text and alert_marker in text:
+    alert = '''            .alert("Remove from Continue Watching?", isPresented: $showDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {
+                    entryToDelete = nil
+                }
+                Button("Remove", role: .destructive) {
+                    if let entry = entryToDelete {
+                        continueStore.remove(id: entry.id)
+                    }
+                    entryToDelete = nil
+                }
+            } message: {
+                if let entry = entryToDelete {
+                    Text("\\(entry.title) will be removed from Continue Watching. Your library/favorites will not be affected.")
+                }
+            }
+'''
+    text = text.replace(alert_marker, alert_marker + alert, 1)
+
+# Long-press a Continue Watching card to get a native Remove action.
+card_end = '''        }.buttonStyle(.plain)
+    }
+
+    private func remainingText'''
+if 'Remove from Continue Watching", systemImage: "trash"' not in text and card_end in text:
+    replacement = '''        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                entryToDelete = entry
+                showDeleteConfirmation = true
+            } label: {
+                Label("Remove from Continue Watching", systemImage: "trash")
+            }
+        }
+    }
+
+    private func remainingText'''
+    text = text.replace(card_end, replacement, 1)
+
 path.write_text(text, encoding="utf-8")
