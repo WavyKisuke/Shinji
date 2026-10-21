@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
+    @EnvironmentObject private var addonStore: AddonStore
     @AppStorage("preferAudioMixing") private var preferAudioMixing = true
     @AppStorage("selectedTheme") private var selectedTheme = "Midnight Neon"
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
@@ -36,39 +37,28 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section {
-                    NavigationLink {
-                        appearanceSettings
-                    } label: {
+                    NavigationLink { appearanceSettings } label: {
                         settingsRow(icon: "circle.lefthalf.filled", title: "Appearance", subtitle: "Dark / Light / Auto", value: appearance)
                     }
-                    NavigationLink {
-                        playbackSettings
-                    } label: {
+                    NavigationLink { playbackSettings } label: {
                         settingsRow(icon: "playpause.fill", title: "Playback", subtitle: "Quality, Audio, Subtitles", value: nil)
                     }
-                    NavigationLink {
-                        downloadSettings
-                    } label: {
+                    NavigationLink { downloadSettings } label: {
                         settingsRow(icon: "arrow.down.to.line", title: "Download", subtitle: "Storage, Cache", value: nil)
                     }
-                    NavigationLink {
-                        accountSettings
-                    } label: {
+                    NavigationLink { accountSettings } label: {
                         settingsRow(icon: "person.crop.circle", title: "Account", subtitle: "Profiles and parental controls", value: "Local")
                     }
-                    NavigationLink {
-                        MediaServerSettingsView()
-                    } label: {
+                    NavigationLink { AddonSettingsView() } label: {
+                        settingsRow(icon: "puzzlepiece.extension.fill", title: "Add-ons", subtitle: "Install and manage streaming sources", value: addonStore.addons.isEmpty ? "None" : "\(addonStore.addons.count)")
+                    }
+                    NavigationLink { MediaServerSettingsView() } label: {
                         settingsRow(icon: "server.rack", title: "Media Servers", subtitle: "Connect Jellyfin or Emby", value: nil)
                     }
-                    NavigationLink {
-                        privacySettings
-                    } label: {
+                    NavigationLink { privacySettings } label: {
                         settingsRow(icon: "hand.raised.fill", title: "Privacy", subtitle: "Permissions, Data", value: nil)
                     }
-                    NavigationLink {
-                        aboutSettings
-                    } label: {
+                    NavigationLink { aboutSettings } label: {
                         settingsRow(icon: "info.circle", title: "About", subtitle: "Version 0.1.0", value: nil)
                     }
                 }
@@ -77,7 +67,7 @@ struct SettingsView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Settings")
+            .navigationTitle("Profile")
             .tint(accentColor)
         }
         .preferredColorScheme(appearance == "Light" ? .light : .dark)
@@ -95,9 +85,7 @@ struct SettingsView: View {
                 Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
-            if let value {
-                Text(value).font(.subheadline).foregroundStyle(.secondary)
-            }
+            if let value { Text(value).font(.subheadline).foregroundStyle(.secondary) }
         }
         .padding(.vertical, 5)
         .contentShape(Rectangle())
@@ -152,9 +140,7 @@ struct SettingsView: View {
                         Text("LIVE PREVIEW").font(.system(size: 9, weight: .black)).tracking(1.5).foregroundStyle(.white).padding(8)
                     }
             }
-            Section("Selected theme") {
-                LabeledContent("Palette", value: selectedTheme)
-            }
+            Section("Selected theme") { LabeledContent("Palette", value: selectedTheme) }
         }
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
@@ -206,8 +192,7 @@ struct SettingsView: View {
             }
             Section("Storage and cache") {
                 LabeledContent("Download location", value: "App storage")
-                Button("Clear temporary cache", role: .destructive) {}
-                    .disabled(true)
+                Button("Clear temporary cache", role: .destructive) {}.disabled(true)
                 Text("Cache management becomes available when Shinji adds its local media cache.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -265,6 +250,125 @@ struct SettingsView: View {
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
         .tint(accentColor)
+    }
+}
+
+private struct AddonSettingsView: View {
+    @EnvironmentObject private var addonStore: AddonStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var manifestURL = ""
+    @State private var isInstalling = false
+    @State private var showStatus = false
+
+    private var accentColor: Color {
+        Color(hex: UserDefaults.standard.string(forKey: "shinjiAccentHex") ?? "B64DFF")
+    }
+
+    var body: some View {
+        Form {
+            Section("Install add-on") {
+                TextField("https://example.com/manifest.json", text: $manifestURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .textContentType(.URL)
+
+                Button {
+                    install()
+                } label: {
+                    HStack {
+                        Image(systemName: isInstalling ? "hourglass" : "plus.circle.fill")
+                        Text(isInstalling ? "Installing…" : "Add Add-on")
+                        Spacer()
+                        if isInstalling { ProgressView() }
+                    }
+                }
+                .disabled(isInstalling || manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Text("Paste the HTTPS manifest URL for a compatible Stremio add-on. Installed sources are saved on this device and used for catalogs and streams.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Installed add-ons") {
+                if addonStore.addons.isEmpty {
+                    ContentUnavailableView("No Add-ons", systemImage: "puzzlepiece.extension", description: Text("Add a manifest URL above to connect a catalog or stream source."))
+                } else {
+                    ForEach(addonStore.addons) { addon in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Image(systemName: "puzzlepiece.extension.fill")
+                                    .foregroundStyle(accentColor)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(addon.name).font(.headline)
+                                    Text("v\(addon.version) · \(addon.format)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            if !addon.publisher.isEmpty {
+                                Text(addon.publisher).font(.caption).foregroundStyle(.secondary)
+                            }
+                            if !addon.capabilities.isEmpty {
+                                Text(addon.capabilities.joined(separator: " · "))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                addonStore.remove(addon)
+                            } label: {
+                                Label("Remove", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section("Sources") {
+                if let status = addonStore.statusMessage, !status.isEmpty {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if let status = addonStore.catalogStatus, !status.isEmpty {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    Task { await addonStore.refreshCatalogs() }
+                } label: {
+                    Label("Refresh add-on catalogs", systemImage: "arrow.clockwise")
+                }
+                .disabled(addonStore.addons.isEmpty)
+            }
+        }
+        .navigationTitle("Add-ons")
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(accentColor)
+        .alert("Add-on", isPresented: $showStatus) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(addonStore.statusMessage ?? "")
+        }
+    }
+
+    private func install() {
+        let value = manifestURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        isInstalling = true
+        Task {
+            await addonStore.install(from: value)
+            await MainActor.run {
+                isInstalling = false
+                manifestURL = ""
+                showStatus = addonStore.statusMessage != nil
+            }
+        }
     }
 }
 
