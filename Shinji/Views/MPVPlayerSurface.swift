@@ -68,6 +68,7 @@ final class MPVMetalViewController: UIViewController {
     private var mpv: OpaquePointer?
     private var isShuttingDown = false
     private var lastMuted: Bool?
+    private var lastPanscanLandscape: Bool?
     private var trackRefreshWorkItem: DispatchWorkItem?
 
     var playUrl: URL?
@@ -133,6 +134,19 @@ final class MPVMetalViewController: UIViewController {
         let scale = metalLayer.contentsScale
         metalLayer.drawableSize = CGSize(width: max(1, bounds.width * scale), height: max(1, bounds.height * scale))
         CATransaction.commit()
+
+        let landscape = bounds.width > bounds.height
+        guard landscape != lastPanscanLandscape else { return }
+        lastPanscanLandscape = landscape
+        mpvQueue.async { [weak self] in
+            guard let self, let handle = self.activeHandle() else { return }
+            // In landscape fullscreen, crop the excess top/bottom or sides as
+            // needed so the video fills the entire display without stretching.
+            // Portrait restores normal aspect-fit behavior.
+            self.execute(["set", "panscan", landscape ? "1" : "0"], on: handle)
+            self.execute(["set", "video-pan-x", "0"], on: handle)
+            self.execute(["set", "video-pan-y", "0"], on: handle)
+        }
     }
 
     private func setupMpv() {
