@@ -3,36 +3,24 @@ from pathlib import Path
 path = Path("Shinji/Views/HomeLibraryView.swift")
 text = path.read_text(encoding="utf-8")
 
-# Home should not render the saved Library/watchlist. Saved items belong only
-# in Library; Home should show catalog content and Continue Watching.
-marker = "    @ViewBuilder\n    private var watchlistSection: some View {"
-if marker in text:
-    start = text.index(marker)
-    next_marker = "    @ViewBuilder\n    private func catalogSection"
-    end = text.index(next_marker, start)
+# Home must never render My List/watchlist. Saved items belong only in Library.
+# Keep Continue Watching and catalog shelves on Home.
+text = text.replace('    @StateObject private var watchlistStore = WatchlistStore.shared\n', '', 1)
+text = text.replace('                    myListSection\n', '', 1)
+
+# Remove the exact My List computed section that older repair scripts inserted.
+start_marker = '    @ViewBuilder\n    private var myListSection: some View {'
+end_marker = '    private func continueCard(_ entry: ContinueWatchingItem) -> some View {'
+if start_marker in text and end_marker in text:
+    start = text.index(start_marker)
+    end = text.index(end_marker, start)
     text = text[:start] + text[end:]
 
-# Some previous versions used the same block without the exact declaration
-# above. Remove any remaining direct watchlistStore references by deleting the
-# enclosing computed section.
-if "watchlistStore" in text:
-    lines = text.splitlines(keepends=True)
-    out = []
-    i = 0
-    while i < len(lines):
-        if "watchlistStore" in lines[i] or "private var myListSection" in lines[i]:
-            # Skip backward only when this starts a ViewBuilder section.
-            i += 1
-            depth = 0
-            while i < len(lines):
-                depth += lines[i].count("{") - lines[i].count("}")
-                if depth <= 0 and lines[i].strip() == "}":
-                    i += 1
-                    break
-                i += 1
-            continue
-        out.append(lines[i])
-        i += 1
-    text = "".join(out)
+# Remove a legacy watchlistSection, if present, without touching unrelated code.
+legacy_marker = '    @ViewBuilder\n    private var watchlistSection: some View {'
+if legacy_marker in text and end_marker in text:
+    start = text.index(legacy_marker)
+    end = text.index(end_marker, start)
+    text = text[:start] + text[end:]
 
 path.write_text(text, encoding="utf-8")
