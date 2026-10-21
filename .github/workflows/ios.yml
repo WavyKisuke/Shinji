@@ -47,6 +47,9 @@ jobs:
       - name: Apply final Nuvio player implementation
         run: python3 Scripts/fix_nuvio_player.py
 
+      - name: Apply Nuvio player layout polish
+        run: python3 Scripts/polish_nuvio_layout.py
+
       - name: Optimize artwork loading and catalog rendering
         run: python3 Scripts/optimize_loading.py
 
