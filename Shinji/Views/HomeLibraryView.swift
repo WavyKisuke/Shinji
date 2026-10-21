@@ -8,6 +8,7 @@ struct HomeLibraryView: View {
     @State private var heroIndex = 0
     @AppStorage("shinjiAccentHex") private var accentHex = "B64DFF"
     @AppStorage("shinjiGlowHex") private var glowHex = "4936FF"
+    private let heroRotationInterval: TimeInterval = 300
 
     private var movies: [AddonCatalogItem] { unique(addonStore.catalogItems.filter { $0.type.lowercased() == "movie" }) }
     private var series: [AddonCatalogItem] { unique(addonStore.catalogItems.filter { $0.type.lowercased() == "series" }) }
@@ -46,7 +47,7 @@ struct HomeLibraryView: View {
     private var heroSection: some View {
         if !heroItems.isEmpty {
             TabView(selection: $heroIndex) {
-                ForEach(Array(heroItems.enumerated()), id: \ .element.id) { index, item in
+                ForEach(Array(heroItems.enumerated()), id: \.element.id) { index, item in
                     NavigationLink {
                         CatalogItemDetailView(item: item)
                     } label: {
@@ -62,7 +63,7 @@ struct HomeLibraryView: View {
             .shadow(color: .black.opacity(0.38), radius: 18, x: 0, y: 12)
             .overlay(alignment: .bottom) {
                 HStack(spacing: 6) {
-                    ForEach(0..<heroItems.count, id: \ .self) { index in
+                    ForEach(0..<heroItems.count, id: \.self) { index in
                         Capsule()
                             .fill(index == heroIndex ? Color.white : Color.white.opacity(0.35))
                             .frame(width: index == heroIndex ? 28 : 6, height: 4)
@@ -71,7 +72,7 @@ struct HomeLibraryView: View {
                 .padding(.bottom, 13)
             }
             .padding(.horizontal, 14)
-            .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+            .onReceive(Timer.publish(every: heroRotationInterval, on: .main, in: .common).autoconnect()) { _ in
                 guard heroItems.count > 1 else { return }
                 withAnimation(.easeInOut(duration: 0.55)) {
                     heroIndex = (heroIndex + 1) % heroItems.count
