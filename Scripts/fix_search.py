@@ -64,18 +64,20 @@ new = '''    private func catalogURL(base: URL, descriptor: StremioCatalogDescri
         return components.url
     }
 '''
-if old not in text:
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
     raise SystemExit("catalogURL block not found")
-text = text.replace(old, new, 1)
 store.write_text(text, encoding="utf-8")
 
 view = Path("Shinji/Views/SearchView.swift")
 text = view.read_text(encoding="utf-8")
 text = text.replace('    @State private var selectedType = "All"\n', '    @State private var selectedType = "All"\n    @State private var searchResults: [AddonCatalogItem] = []\n    @State private var isSearching = false\n    @AppStorage("shinjiSearchHistory") private var searchHistoryRaw = ""\n', 1)
 
-start = text.index('    private var results: [AddonCatalogItem] {')
-end = text.index('\n    var body: some View {', start)
-replacement = '''    private var browseResults: [AddonCatalogItem] {
+if 'private var browseResults: [AddonCatalogItem]' not in text:
+    start = text.index('    private var results: [AddonCatalogItem] {')
+    end = text.index('\n    var body: some View {', start)
+    replacement = '''    private var browseResults: [AddonCatalogItem] {
         var items = addonStore.catalogItems
         if selectedType == "Movies" { items = items.filter { $0.type.lowercased() == "movie" } }
         if selectedType == "Shows" { items = items.filter { $0.type.lowercased() == "series" } }
@@ -117,7 +119,7 @@ replacement = '''    private var browseResults: [AddonCatalogItem] {
         isSearching = false
     }
 '''
-text = text[:start] + replacement + text[end:]
+    text = text[:start] + replacement + text[end:]
 
 text = text.replace('''                    searchField
                     typePicker
@@ -142,7 +144,8 @@ text = text.replace('''                    if results.isEmpty {
                         emptyState
                     } else {''', 1)
 
-text = text.replace('''        .task { await addonStore.refreshCatalogs() }
+if '.task(id: "\\(query)|\\(selectedType)")' not in text:
+    text = text.replace('''        .task { await addonStore.refreshCatalogs() }
 ''', '''        .task { await addonStore.refreshCatalogs() }
         .task(id: "\\(query)|\\(selectedType)") {
             try? await Task.sleep(for: .milliseconds(350))
@@ -157,8 +160,9 @@ text = text.replace('''                .autocorrectionDisabled()
                 .onSubmit { saveSearch(query) }
             if !query.isEmpty {''', 1)
 
-marker = '    private var typePicker: some View {'
-recent = '''    private var recentSearches: some View {
+if 'private var recentSearches: some View' not in text:
+    marker = '    private var typePicker: some View {'
+    recent = '''    private var recentSearches: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Recent searches")
@@ -200,5 +204,6 @@ recent = '''    private var recentSearches: some View {
     }
 
 '''
-text = text.replace(marker, recent + marker, 1)
+    text = text.replace(marker, recent + marker, 1)
+
 view.write_text(text, encoding="utf-8")
