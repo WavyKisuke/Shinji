@@ -41,16 +41,19 @@ struct PlayerView: View {
                                 .resizable()
                                 .scaledToFill()
                                 .blur(radius: 18)
-                                .opacity(0.48)
+                                .opacity(0.38)
                         } else {
-                            Color.black
-                                .opacity(0.8)
+                            Color.black.opacity(0.8)
                         }
                     }
                     .ignoresSafeArea()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .zIndex(0)
                 }
+
+                LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.1), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+                    .zIndex(0.5)
 
                 playerSurface()
                     .zIndex(1)
@@ -84,7 +87,7 @@ struct PlayerView: View {
                     VStack(spacing: 12) {
                         ProgressView()
                             .tint(.white)
-                            .scaleEffect(1.2)
+                            .scaleEffect(1.15)
                         Text("Preparing stream")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white.opacity(0.8))
@@ -225,7 +228,7 @@ struct PlayerView: View {
     private func controlsOverlay() -> some View {
         ZStack {
             LinearGradient(
-                colors: [.black.opacity(0.68), .clear, .black.opacity(0.8)],
+                colors: [.black.opacity(0.72), .clear, .clear, .black.opacity(0.82)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -250,8 +253,9 @@ struct PlayerView: View {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 40, height: 40)
-                    .background(.black.opacity(0.38), in: Circle())
+                    .frame(width: 38, height: 38)
+                    .background(.white.opacity(0.07), in: Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close player")
@@ -259,7 +263,7 @@ struct PlayerView: View {
             if !isFullscreen {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
                         .lineLimit(1)
                     Text(playbackDiagnostics)
                         .font(.caption2)
@@ -277,23 +281,25 @@ struct PlayerView: View {
                     .foregroundStyle(.white.opacity(0.82))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(.white.opacity(0.09), in: Capsule())
+                    .background(.white.opacity(0.08), in: Capsule())
                     .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
 
                 Button { isFullscreen.toggle() } label: {
                     Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 40, height: 40)
-                        .background(.black.opacity(0.38), in: Circle())
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 38, height: 38)
+                        .background(.white.opacity(0.07), in: Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
 
                 Button { lockControls() } label: {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 40, height: 40)
-                        .background(.black.opacity(0.38), in: Circle())
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 38, height: 38)
+                        .background(.white.opacity(0.07), in: Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Lock controls")
@@ -304,7 +310,7 @@ struct PlayerView: View {
     }
 
     private var centerControls: some View {
-        HStack(spacing: 32) {
+        HStack(spacing: 28) {
             seekButton(seconds: -10)
 
             Button {
@@ -315,9 +321,9 @@ struct PlayerView: View {
                     .font(.system(size: 30, weight: .bold))
                     .frame(width: 72, height: 72)
                     .foregroundStyle(.white)
-                    .background(.black.opacity(0.28), in: Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 8)
+                    .background(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.16), lineWidth: 1.5))
+                    .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 10)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
@@ -327,10 +333,10 @@ struct PlayerView: View {
     }
 
     private var bottomControls: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             VStack(spacing: 8) {
                 HStack(spacing: 10) {
-                    Text(formatTime(position)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.85))
+                    Text(formatTime(position)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
                     Slider(
                         value: Binding(
                             get: { duration > 0 ? min(position, duration) : 0 },
@@ -356,10 +362,11 @@ struct PlayerView: View {
                     )
                     .tint(.white)
                     .contentShape(Rectangle())
-                    Text(formatTime(duration)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.85))
+                    Text(formatTime(duration)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
                 }
+                .padding(.horizontal, 10)
             }
-            .padding(.horizontal, 18)
+            .padding(.bottom, 2)
 
             HStack(spacing: 10) {
                 bottomButton("waveform", "Audio") {
@@ -378,9 +385,13 @@ struct PlayerView: View {
                 }
                 bottomButton("gearshape", "Settings") { showSettings = true }
                 Spacer(minLength: 0)
-                Text("Shinji")
+                Text("nuvio")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.2), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 16)
@@ -402,7 +413,7 @@ struct PlayerView: View {
                 Text("10").font(.system(size: 8, weight: .bold)).offset(y: 1)
             }
             .frame(width: 58, height: 58)
-            .background(.black.opacity(0.3), in: Circle())
+            .background(.white.opacity(0.06), in: Circle())
             .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
             .contentShape(Circle())
         }
@@ -417,9 +428,9 @@ struct PlayerView: View {
                 Text(label)
                     .font(.system(size: 9, weight: .semibold))
             }
-            .foregroundStyle(.white.opacity(0.9))
+            .foregroundStyle(.white.opacity(0.92))
             .frame(width: 56, height: 46)
-            .background(.black.opacity(0.28), in: Capsule())
+            .background(.white.opacity(0.06), in: Capsule())
             .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(.plain)
