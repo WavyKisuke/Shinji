@@ -1,11 +1,21 @@
 import Foundation
 import Combine
 
+struct AddonExternalTrack: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let language: String
+    let url: URL
+    let headers: [String: String]
+}
+
 struct AddonStreamOption: Identifiable, Hashable {
     let id: String
     let title: String
     let url: URL
     let headers: [String: String]
+    let audioTracks: [AddonExternalTrack]
+    let subtitles: [AddonExternalTrack]
 }
 
 struct AddonCatalogItem: Identifiable, Hashable {
@@ -182,7 +192,9 @@ final class AddonStore: ObservableObject {
                             id: optionID,
                             title: "\(streamTitle) · \(addon.name)",
                             url: parsedURL,
-                            headers: suppliedHeaders
+                            headers: suppliedHeaders,
+                            audioTracks: parseExternalTracks(stream["audioTracks"], fallbackHeaders: suppliedHeaders, prefix: "audio"),
+                            subtitles: parseExternalTracks(stream["subtitles"], fallbackHeaders: suppliedHeaders, prefix: "sub")
                         ))
                     }
                 }
@@ -199,6 +211,27 @@ final class AddonStore: ObservableObject {
         } else {
             streamStatus = "No direct playable streams were returned. The installed sources may be catalog-only, require authentication, or provide unsupported stream types."
         }
+    }
+
+    private func parseExternalTracks(_ value: Any?, fallbackHeaders: [String: String], prefix: String) -> [AddonExternalTrack] {
+        guard let entries = value as? [[String: Any]] else { return [] }
+        var result: [AddonExternalTrack] = []
+        for entry in entries {
+            guard let rawURL = (entry["url"] as? String) ?? (entry["src"] as? String),
+                  let url = URL(string: rawURL),
+                  ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+                  url.host != nil else { continue }
+            let language = (entry["lang"] as? String) ?? (entry["language"] as? String) ?? ""
+            let title = (entry["title"] as? String)
+                ?? (entry["name"] as? String)
+                ?? (language.isEmpty ? prefix.capitalized : language.uppercased())
+            let id = (entry["id"] as? String)
+                ?? (entry["id"] as? Int).map(String.init)
+                ?? rawURL
+            let headers = (entry["headers"] as? [String: String]) ?? fallbackHeaders
+            result.append(AddonExternalTrack(id: id, title: title, language: language, url: url, headers: headers))
+        }
+        return result
     }
 
     private func streamURL(base: URL, item: AddonCatalogItem) -> URL? {
