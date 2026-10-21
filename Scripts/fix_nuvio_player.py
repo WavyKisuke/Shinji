@@ -1,211 +1,151 @@
 from pathlib import Path
-import re
 
-# Final player normalization layer. This runs after the other compatibility
-# patches so the player ends up with one consistent Nuvio-style interaction
-# surface instead of several patches competing with each other.
+player_path = Path("Shinji/Views/PlayerView.swift")
+p = player_path.read_text(encoding="utf-8")
 
-player = Path("Shinji/Views/PlayerView.swift")
-p = player.read_text(encoding="utf-8")
-
-# Keep the canonical commands used by Shinji's MPV bridge.
-p = p.replace('["cycle", "aid"]', '["cycle", "audio"]')
-p = p.replace('["cycle", "sid"]', '["cycle", "sub"]')
+# Use direct pause state instead of cycling it.
 p = p.replace('sendCommand(["cycle", "pause"])', 'sendCommand(["set", "pause", isPlaying ? "yes" : "no"])')
 
-# Make the whole video surface respond to horizontal swipe seeking, matching
-# the gesture-first interaction used by Nuvio mobile.
-old_surface = '''        .frame(maxWidth: .infinity, maxHeight: .infinity)\n        .background(.black)\n        .allowsHitTesting(true)'''
-new_surface = '''        .frame(maxWidth: .infinity, maxHeight: .infinity)\n        .background(.black)\n        .allowsHitTesting(true)\n        .simultaneousGesture(\n            DragGesture(minimumDistance: 28)\n                .onEnded { value in\n                    guard !controlsLocked, abs(value.translation.width) > abs(value.translation.height), abs(value.translation.width) > 55 else { return }\n                    let seconds = value.translation.width > 0 ? -10 : 10\n                    sendCommand(["seek", String(seconds), "relative"])\n                    if duration > 0 {\n                        position = max(0, min(duration, position + Double(seconds)))\n                        ignorePositionUpdatesUntil = Date().addingTimeInterval(0.7)\n                    }\n                    showControls = true\n                    scheduleHide()\n                }\n        )'''
-if old_surface in p and '.simultaneousGesture(' not in p:
-    p = p.replace(old_surface, new_surface, 1)
+# Real Nuvio-style audio/subtitle selection state.
+if "@State private var showAudioPicker = false" not in p:
+    p = p.replace(
+        "    @State private var showSettings = false\n",
+        """    @State private var showSettings = false
+    @State private var showAudioPicker = false
+    @State private var showSubtitlePicker = false
+    @State private var audioTracks: [MPVPlayerTrack] = []
+    @State private var subtitleTracks: [MPVPlayerTrack] = []
+    @State private var selectedAudioTrackID: Int?
+    @State private var selectedSubtitleTrackID: Int?
+""", 1)
 
-# The speed control is owned here. Remove every prior speed state/sheet/button
-# and install exactly one Nuvio-style dedicated speed control.
-p = re.sub(r'\n\s*@State private var showPlaybackSpeed = false\n', '\n', p)
-p = p.replace('    @State private var showSettings = false\n',
-              '    @State private var showSettings = false\n    @State private var showPlaybackSpeed = false\n', 1)
-p = re.sub(r'\nprivate struct PlaybackSpeedSheet: View \{.*?\n\}\n\nprivate struct PlayerSettingsSheet',
-           '\nprivate struct PlayerSettingsSheet', p, flags=re.S)
+# Replace blind cycling with pickers.
+p = p.replace('sendCommand(["cycle", "audio"])', 'showAudioPicker = true')
+p = p.replace('sendCommand(["cycle", "aid"])', 'showAudioPicker = true')
+p = p.replace('sendCommand(["cycle", "sub"])', 'showSubtitlePicker = true')
+p = p.replace('sendCommand(["cycle", "sid"])', 'showSubtitlePicker = true')
 
-# Remove old Playback sections from the settings sheet so speed is never shown twice.
-start = '                Section("Playback") {'
-while start in p:
-    begin = p.find(start)
-    brace = p.find('{', begin)
-    depth = 0
-    end = None
-    for i in range(brace, len(p)):
-        if p[i] == '{':
-            depth += 1
-        elif p[i] == '}':
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    if end is None:
-        break
-    p = p[:begin] + p[end:]
-
-p = re.sub(
-    r'\n\s*bottomButton\("speedometer", "Playback Speed"\) \{.*?\n\s*\}\n',
-    '\n', p, flags=re.S
-)
-
-speed_sheet = '''
-private struct PlaybackSpeedSheet: View {
-    let sendCommand: ([String]) -> Void
-    @Environment(\\.dismiss) private var dismiss
-
-    private let speeds: [(String, String)] = [
-        ("0.5×", "0.5"),
-        ("0.75×", "0.75"),
-        ("Normal", "1"),
-        ("1.25×", "1.25"),
-        ("1.5×", "1.5"),
-        ("1.75×", "1.75"),
-        ("2×", "2")
-    ]
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(speeds, id: \\.1) { speed in
-                    Button(speed.0) {
-                        sendCommand(["set", "speed", speed.1])
-                        dismiss()
-                    }
-                }
+# Receive the MPV track list.
+anchor = '''            onPlaybackUpdate: { time, total, paused in
+                // Don't let mpv's position fight the slider while scrubbing or just after a seek.
+                if !isScrubbing && Date() >= ignorePositionUpdatesUntil { position = time }
+                duration = total
+                isPlaying = !paused
+                if total > 0 { isPreparingPlayback = false }
             }
-            .navigationTitle("Playback Speed")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
-private struct PlayerSettingsSheet'''
-marker = '\nprivate struct PlayerSettingsSheet'
-if marker in p:
-    p = p.replace(marker, '\n' + speed_sheet, 1)
-
-settings_button = '                bottomButton("gearshape", "Settings") { showSettings = true }\n'
-speed_button = '''                bottomButton("speedometer", "Playback Speed") {
-                    showPlaybackSpeed = true
-                }
 '''
-if settings_button in p and speed_button not in p:
-    p = p.replace(settings_button, speed_button + settings_button, 1)
+if anchor in p and "onTracks: { tracks in" not in p:
+    p = p.replace(anchor, anchor + ''',
+            onTracks: { tracks in
+                audioTracks = tracks.filter { $0.type == "audio" }
+                subtitleTracks = tracks.filter { $0.type == "sub" }
+                selectedAudioTrackID = tracks.first(where: { $0.type == "audio" && $0.isSelected })?.id
+                selectedSubtitleTrackID = tracks.first(where: { $0.type == "sub" && $0.isSelected })?.id
+            }
+''', 1)
 
-# Attach exactly one dedicated speed sheet before the general settings sheet.
-p = re.sub(
-    r'\n\s*\.sheet\(isPresented: \$showPlaybackSpeed\) \{.*?\n\s*\}\n(?=\s*\.sheet\(isPresented: \$showSettings\))',
-    '\n', p, flags=re.S
-)
-speed_presenter = '''        .sheet(isPresented: $showPlaybackSpeed) {
-            PlaybackSpeedSheet(sendCommand: sendCommand)
-                .presentationDetents([.height(360)])
+# Insert the track rails before the settings sheet.
+marker = '''        .sheet(isPresented: $showSettings) {
+            PlayerSettingsSheet(sendCommand: sendCommand)
+                .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
 '''
-settings_sheet = '        .sheet(isPresented: $showSettings) {'
-if settings_sheet in p and speed_presenter not in p:
-    p = p.replace(settings_sheet, speed_presenter + settings_sheet, 1)
-
-# Nuvio-style long press: temporarily play at 2× while holding the video.
-if 'temporaryDoubleSpeed' not in p:
-    p = p.replace('    @State private var showPlaybackSpeed = false\n',
-                  '    @State private var showPlaybackSpeed = false\n    @State private var temporaryDoubleSpeed = false\n', 1)
-    anchor = '                    .onTapGesture { toggleControls() }\n'
-    replacement = '''                    .onTapGesture { toggleControls() }
-                    .onLongPressGesture(minimumDuration: 0.45, maximumDistance: 24, pressing: { pressing in
-                        guard playbackError == nil else { return }
-                        if pressing && !temporaryDoubleSpeed {
-                            temporaryDoubleSpeed = true
-                            sendCommand(["set", "speed", "2"])
-                        } else if !pressing && temporaryDoubleSpeed {
-                            temporaryDoubleSpeed = false
-                            sendCommand(["set", "speed", "1"])
-                        }
-                    }, perform: {})
-'''
-    p = p.replace(anchor, replacement, 1)
-
-player.write_text(p, encoding="utf-8")
-
-# Harden the MPV bridge so transport commands use direct properties where
-# possible. Track cycling remains exposed through the normal MPV command path.
-mpv = Path("Shinji/Views/MPVPlayerSurface.swift")
-m = mpv.read_text(encoding="utf-8")
-
-old_command = '''    func command(_ arguments: [String]) {\n        guard !arguments.isEmpty else { return }\n        mpvQueue.async { [weak self] in\n            guard let self, let handle = self.activeHandle() else { return }\n            self.execute(arguments, on: handle)\n        }\n    }'''
-new_command = '''    func command(_ arguments: [String]) {
-        guard !arguments.isEmpty else { return }
-        mpvQueue.async { [weak self] in
-            guard let self, let handle = self.activeHandle() else { return }
-
-            if arguments.count == 3, arguments[0] == "set" {
-                let property = arguments[1]
-                let value = arguments[2]
-                switch property {
-                case "pause":
-                    var paused: Int32 = value == "yes" ? 1 : 0
-                    let result = mpv_set_property(handle, "pause", MPV_FORMAT_FLAG, &paused)
-                    if result < 0 { self.publishError("MPV pause command failed: \\(String(cString: mpv_error_string(result)))") }
-                    self.publishPlaybackState(handle)
-                    return
-                case "mute":
-                    var muted: Int32 = value == "yes" ? 1 : 0
-                    let result = mpv_set_property(handle, "mute", MPV_FORMAT_FLAG, &muted)
-                    if result < 0 { self.publishError("MPV mute command failed: \\(String(cString: mpv_error_string(result)))") }
-                    return
-                case "speed":
-                    var speed = Double(value) ?? 1.0
-                    let result = mpv_set_property(handle, "speed", MPV_FORMAT_DOUBLE, &speed)
-                    if result < 0 { self.publishError("MPV speed command failed: \\(String(cString: mpv_error_string(result)))") }
-                    return
-                case "video-zoom":
-                    var zoom = Double(value) ?? 0.0
-                    let result = mpv_set_property(handle, "video-zoom", MPV_FORMAT_DOUBLE, &zoom)
-                    if result < 0 { self.publishError("MPV zoom command failed: \\(String(cString: mpv_error_string(result)))") }
-                    return
-                case "video-unscaled":
-                    var unscaled: Int32 = value == "yes" ? 1 : 0
-                    let result = mpv_set_property(handle, "video-unscaled", MPV_FORMAT_FLAG, &unscaled)
-                    if result < 0 { self.publishError("MPV sizing command failed: \\(String(cString: mpv_error_string(result)))") }
-                    return
-                default:
-                    break
-                }
-            }
-
-            if arguments.count == 3, arguments[0] == "seek" {
-                let amount = Double(arguments[1]) ?? 0
-                let mode = arguments[2]
-                if mode == "absolute" {
-                    var target = amount
-                    let result = mpv_set_property(handle, "time-pos", MPV_FORMAT_DOUBLE, &target)
-                    if result < 0 { self.publishError("MPV seek command failed: \\(String(cString: mpv_error_string(result)))") }
-                } else {
-                    var current = 0.0
-                    _ = mpv_get_property(handle, "time-pos", MPV_FORMAT_DOUBLE, &current)
-                    var target = max(0, current + amount)
-                    let result = mpv_set_property(handle, "time-pos", MPV_FORMAT_DOUBLE, &target)
-                    if result < 0 { self.publishError("MPV seek command failed: \\(String(cString: mpv_error_string(result)))") }
-                }
-                self.publishPlaybackState(handle)
-                return
-            }
-
-            self.execute(arguments, on: handle)
+if marker in p and ".fullScreenCover(isPresented: $showAudioPicker)" not in p:
+    picker = '''        .fullScreenCover(isPresented: $showAudioPicker) {
+            NuvioPlayerTrackPicker(
+                title: "Audio",
+                tracks: audioTracks.map { NuvioPlayerTrack(id: $0.id, title: $0.title, language: $0.language, type: $0.type) },
+                selectedID: selectedAudioTrackID,
+                offOption: false,
+                onSelect: { id in
+                    if let id {
+                        selectedAudioTrackID = id
+                        sendCommand(["set", "aid", String(id)])
+                    }
+                    showAudioPicker = false
+                    scheduleHide()
+                },
+                onDismiss: { showAudioPicker = false }
+            )
+            .background(.black)
         }
-    }'''
-if old_command in m:
-    m = m.replace(old_command, new_command, 1)
+        .fullScreenCover(isPresented: $showSubtitlePicker) {
+            NuvioPlayerTrackPicker(
+                title: "Subtitles",
+                tracks: subtitleTracks.map { NuvioPlayerTrack(id: $0.id, title: $0.title, language: $0.language, type: $0.type) },
+                selectedID: selectedSubtitleTrackID,
+                offOption: true,
+                onSelect: { id in
+                    selectedSubtitleTrackID = id
+                    sendCommand(["set", "sid", id.map(String.init) ?? "no"])
+                    showSubtitlePicker = false
+                    scheduleHide()
+                },
+                onDismiss: { showSubtitlePicker = false }
+            )
+            .background(.black)
+        }
+'''
+    p = p.replace(marker, picker + marker, 1)
 
-m = m.replace('["cycle", "aid"]', '["cycle", "audio"]')
-m = m.replace('["cycle", "sid"]', '["cycle", "sub"]')
-mpv.write_text(m, encoding="utf-8")
+player_path.write_text(p, encoding="utf-8")
+
+# MPV bridge: expose track-list metadata and selected IDs.
+mpv_path = Path("Shinji/Views/MPVPlayerSurface.swift")
+m = mpv_path.read_text(encoding="utf-8")
+
+if "var onTracks: ([MPVPlayerTrack]) -> Void" not in m:
+    m = m.replace(
+        "    var onPlaybackUpdate: ((Double, Double, Bool) -> Void) = { _, _, _ in }\n",
+        "    var onPlaybackUpdate: ((Double, Double, Bool) -> Void) = { _, _, _ in }\n    var onTracks: ([MPVPlayerTrack]) -> Void = { _ in }\n", 1)
+    m = m.replace("        player.onPlaybackUpdate = onPlaybackUpdate\n        context.coordinator.player = player", "        player.onPlaybackUpdate = onPlaybackUpdate\n        player.onTracks = onTracks\n        context.coordinator.player = player", 1)
+    m = m.replace("        player.onPlaybackUpdate = onPlaybackUpdate\n        player.setMuted(muted)", "        player.onPlaybackUpdate = onPlaybackUpdate\n        player.onTracks = onTracks\n        player.setMuted(muted)", 1)
+    m = m.replace("    var onPlaybackUpdate: ((Double, Double, Bool) -> Void)?\n", "    var onPlaybackUpdate: ((Double, Double, Bool) -> Void)?\n    var onTracks: (([MPVPlayerTrack]) -> Void)?\n", 1)
+    m = m.replace('                    self.publishStatus("Stream loaded")\n                    self.publishPlaybackState(handle)', '                    self.publishStatus("Stream loaded")\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)', 1)
+    m = m.replace('                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishPlaybackState(handle)', '                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)', 1)
+
+    model = '''struct MPVPlayerTrack: Identifiable, Hashable {
+    let id: Int
+    let title: String
+    let language: String?
+    let type: String
+    let isSelected: Bool
+}
+
+'''
+    m = m.replace('struct MPVPlayerSurface: UIViewControllerRepresentable {', model + 'struct MPVPlayerSurface: UIViewControllerRepresentable {', 1)
+
+    methods = '''    private func publishTracks(_ handle: OpaquePointer) {
+        var count: Int64 = 0
+        guard mpv_get_property(handle, "track-list/count", MPV_FORMAT_INT64, &count) >= 0 else { return }
+        var tracks: [MPVPlayerTrack] = []
+        for index in 0..<max(0, Int(count)) {
+            let prefix = "track-list/\\(index)"
+            guard let type = stringProperty(handle, "\\(prefix)/type"), type == "audio" || type == "sub" else { continue }
+            let id = intProperty(handle, "\\(prefix)/id") ?? (index + 1)
+            let title = stringProperty(handle, "\\(prefix)/title") ?? ""
+            let language = stringProperty(handle, "\\(prefix)/lang")
+            let selected = intProperty(handle, type == "audio" ? "aid" : "sid") == id
+            tracks.append(MPVPlayerTrack(id: id, title: title, language: language, type: type, isSelected: selected))
+        }
+        DispatchQueue.main.async { [weak self] in self?.onTracks?(tracks) }
+    }
+
+    private func stringProperty(_ handle: OpaquePointer, _ name: String) -> String? {
+        var value: UnsafeMutablePointer<CChar>?
+        guard mpv_get_property(handle, name, MPV_FORMAT_STRING, &value) >= 0, let value else { return nil }
+        defer { mpv_free(value) }
+        return String(cString: value)
+    }
+
+    private func intProperty(_ handle: OpaquePointer, _ name: String) -> Int? {
+        var value: Int64 = 0
+        guard mpv_get_property(handle, name, MPV_FORMAT_INT64, &value) >= 0 else { return nil }
+        return Int(value)
+    }
+
+'''
+    m = m.replace('    private func publishPlaybackState(_ handle: OpaquePointer) {', methods + '    private func publishPlaybackState(_ handle: OpaquePointer) {', 1)
+
+mpv_path.write_text(m, encoding="utf-8")
