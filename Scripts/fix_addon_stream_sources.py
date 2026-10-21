@@ -24,33 +24,28 @@ if "let audioTracks: [AddonExternalTrack]" not in text:
     text = text.replace(marker, "    let headers: [String: String]\n    let audioTracks: [AddonExternalTrack]\n    let subtitles: [AddonExternalTrack]\n}", 1)
 
 if "audioTracks: parseExternalTracks" not in text:
-    start = text.find("found.append(AddonStreamOption(")
-    if start < 0:
+    old = '''                        found.append(AddonStreamOption(
+                            id: optionID,
+                            title: "\\(streamTitle) · \\(addon.name)",
+                            url: parsedURL,
+                            headers: suppliedHeaders
+                        ))'''
+    if old not in text:
         raise SystemExit("stream construction block not found")
-    end = text.find("\n                        ))", start)
-    if end < 0:
-        raise SystemExit("stream construction block end not found")
-    end += len("\n                        ))")
-    old = text[start:end]
-    if "id: optionID" not in old or "headers: suppliedHeaders" not in old:
-        raise SystemExit("unexpected stream construction block")
-    indent_start = start
-    line_start = text.rfind("\n", 0, indent_start) + 1
-    indent = text[line_start:start]
-    replacement = f'''{indent}found.append(AddonStreamOption(
-{indent}    id: optionID,
-{indent}    title: "\\(streamTitle) · \\(addon.name)",
-{indent}    url: parsedURL,
-{indent}    headers: suppliedHeaders,
-{indent}    audioTracks: parseExternalTracks(stream["audioTracks"], fallbackHeaders: suppliedHeaders, prefix: "audio"),
-{indent}    subtitles: parseExternalTracks(stream["subtitles"], fallbackHeaders: suppliedHeaders, prefix: "sub")
-{indent}))'''
-    text = text[:start] + replacement + text[end:]
+    new = '''                        found.append(AddonStreamOption(
+                            id: optionID,
+                            title: "\\(streamTitle) · \\(addon.name)",
+                            url: parsedURL,
+                            headers: suppliedHeaders,
+                            audioTracks: parseExternalTracks(stream["audioTracks"], fallbackHeaders: suppliedHeaders, prefix: "audio"),
+                            subtitles: parseExternalTracks(stream["subtitles"], fallbackHeaders: suppliedHeaders, prefix: "sub")
+                        ))'''
+    text = text.replace(old, new, 1)
 
 if "private func parseExternalTracks" not in text:
-    marker = "    private func stringDictionary(_ value: Any?) -> [String: String]? {"
+    marker = "    private func addonPathPrefix(_ path: String) -> String {"
     if marker not in text:
-        raise SystemExit("stringDictionary marker not found")
+        raise SystemExit("addonPathPrefix marker not found")
     method = '''    private func parseExternalTracks(_ value: Any?, fallbackHeaders: [String: String], prefix: String) -> [AddonExternalTrack] {
         guard let entries = value as? [[String: Any]] else { return [] }
         return entries.compactMap { entry in
@@ -63,7 +58,7 @@ if "private func parseExternalTracks" not in text:
                 ?? (entry["name"] as? String)
                 ?? (language.isEmpty ? prefix.capitalized : language.uppercased())
             let id = (entry["id"] as? String) ?? (entry["id"] as? Int).map(String.init) ?? rawURL
-            let headers = stringDictionary(entry["headers"]) ?? fallbackHeaders
+            let headers = (entry["headers"] as? [String: String]) ?? fallbackHeaders
             return AddonExternalTrack(id: id, title: title, language: language, url: url, headers: headers)
         }
     }
