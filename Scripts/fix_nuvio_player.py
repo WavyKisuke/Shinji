@@ -121,7 +121,7 @@ if "var onTracks: ([MPVPlayerTrack]) -> Void" not in m:
             let title = stringProperty(handle, "\\(prefix)/title") ?? ""
             let language = stringProperty(handle, "\\(prefix)/lang") ?? ""
             let selected = intProperty(handle, type == "audio" ? "aid" : "sid") == id
-            tracks.append(MPVPlayerTrack(id: id, title: title, language: language, type: type, isSelected: selected)
+            tracks.append(MPVPlayerTrack(id: id, title: title, language: language, type: type, isSelected: selected))
         }
         DispatchQueue.main.async { [weak self] in self?.onTracks?(tracks) }
     }
@@ -142,7 +142,6 @@ if "var onTracks: ([MPVPlayerTrack]) -> Void" not in m:
 '''
     m = m.replace('    private func publishPlaybackState(_ handle: OpaquePointer) {', methods + '    private func publishPlaybackState(_ handle: OpaquePointer) {', 1)
 
-# Keep the generated model compatible with the picker: language is always a displayable string.
 m = m.replace('let language: String?\n', 'let language: String\n')
 m = m.replace('let language = stringProperty(handle, "\\(prefix)/lang")\n', 'let language = stringProperty(handle, "\\(prefix)/lang") ?? ""\n')
 
