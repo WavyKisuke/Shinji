@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - main
-      - master
-      - feature/player-fullscreen-audio-track
-      - fix/player-black-screen
-      - nuvio-player-optimization
-      - player/nuvio-kotlin-optimization
   workflow_dispatch:
 
 permissions:
@@ -54,6 +49,7 @@ jobs:
 
       - name: Finalize Nuvio MPV track commands
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           for name in ["Shinji/Views/PlayerView.swift", "Shinji/Views/MPVPlayerSurface.swift"]:
