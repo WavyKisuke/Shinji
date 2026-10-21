@@ -48,6 +48,15 @@ if "struct MPVPlayerTrack: Identifiable, Hashable" not in m:
         1,
     )
 
+# Observe the properties that actually change when MPV finishes discovering
+# embedded/external tracks. FILE_LOADED alone can race track discovery.
+if '"track-list/count"' not in m.split("private func setupMpv", 1)[1].split("mpv_set_wakeup_callback", 1)[0]:
+    m = m.replace(
+        '        _ = mpv_observe_property(handle, 3, "pause", MPV_FORMAT_FLAG)\n',
+        '        _ = mpv_observe_property(handle, 3, "pause", MPV_FORMAT_FLAG)\n        _ = mpv_observe_property(handle, 4, "track-list/count", MPV_FORMAT_INT64)\n        _ = mpv_observe_property(handle, 5, "aid", MPV_FORMAT_INT64)\n        _ = mpv_observe_property(handle, 6, "sid", MPV_FORMAT_INT64)\n',
+        1,
+    )
+
 if "private func publishTracks(_ handle: OpaquePointer)" not in m:
     methods = '''    private func publishTracks(_ handle: OpaquePointer) {
         var count: Int64 = 0
@@ -69,6 +78,16 @@ if "private func publishTracks(_ handle: OpaquePointer)" not in m:
         }
     }
 
+    private func refreshTracksSoon(_ handle: OpaquePointer) {
+        publishTracks(handle)
+        for delay in [0.25, 0.75, 1.5] {
+            mpvQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, let active = self.activeHandle(), active == handle else { return }
+                self.publishTracks(active)
+            }
+        }
+    }
+
     private func stringProperty(_ handle: OpaquePointer, _ name: String) -> String? {
         var value: UnsafeMutablePointer<CChar>?
         guard mpv_get_property(handle, name, MPV_FORMAT_STRING, &value) >= 0, let value else { return nil }
@@ -87,18 +106,38 @@ if "private func publishTracks(_ handle: OpaquePointer)" not in m:
         "    private func publishPlaybackState(_ handle: OpaquePointer) {",
         methods + "    private func publishPlaybackState(_ handle: OpaquePointer) {",
         1,
-    )
+)
+else:
+    # Upgrade an existing bridge from a single FILE_LOADED refresh to retries.
+    if "private func refreshTracksSoon" not in m:
+        methods = '''    private func refreshTracksSoon(_ handle: OpaquePointer) {
+        publishTracks(handle)
+        for delay in [0.25, 0.75, 1.5] {
+            mpvQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, let active = self.activeHandle(), active == handle else { return }
+                self.publishTracks(active)
+            }
+        }
+    }
 
-# Refresh tracks when a stream loads and whenever MPV reports a property change.
+'''
+        m = m.replace("    private func publishPlaybackState(_ handle: OpaquePointer) {", methods + "    private func publishPlaybackState(_ handle: OpaquePointer) {", 1)
+
 m = m.replace(
-    '                    self.publishStatus("Stream loaded")\n                    self.publishPlaybackState(handle)',
     '                    self.publishStatus("Stream loaded")\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)',
+    '                    self.publishStatus("Stream loaded")\n                    self.refreshTracksSoon(handle)\n                    self.publishPlaybackState(handle)',
     1,
 )
 m = m.replace(
-    '                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishPlaybackState(handle)',
+    '                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)',
     '                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)',
     1,
 )
+if "case MPV_EVENT_TRACKS_CHANGED:" not in m:
+    m = m.replace(
+        "                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)\n",
+        "                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)\n                case MPV_EVENT_TRACKS_CHANGED:\n                    self.refreshTracksSoon(handle)\n",
+        1,
+    )
 
 path.write_text(m, encoding="utf-8")
