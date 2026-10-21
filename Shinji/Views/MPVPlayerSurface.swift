@@ -218,8 +218,9 @@ final class MPVMetalViewController: UIViewController {
                     self.publishPlaybackState(handle)
                     self.scheduleTrackRefresh()
                 case MPV_EVENT_PROPERTY_CHANGE:
+                    // Do not refresh the track list for every time-pos/pause update.
+                    // Those events fire continuously and can starve the debounced track refresh.
                     self.publishPlaybackState(handle)
-                    self.scheduleTrackRefresh()
                 case MPV_EVENT_END_FILE:
                     if let raw = event.pointee.data {
                         let data = raw.assumingMemoryBound(to: mpv_event_end_file.self).pointee
