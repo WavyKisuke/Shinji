@@ -4,10 +4,11 @@ struct CatalogItemDetailView: View {
     let item: AddonCatalogItem
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var addonStore: AddonStore
-    @StateObject private var watchlistStore = WatchlistStore.shared
+    @ObservedObject private var watchlistStore = WatchlistStore.shared
     @State private var isLoading = false
     @State private var selectedStream: AddonStreamOption?
     @State private var showPlayer = false
+    @State private var libraryMessage: String?
 
     private var isSaved: Bool {
         watchlistStore.contains(catalogID: item.id, addonName: item.addonName)
@@ -32,12 +33,13 @@ struct CatalogItemDetailView: View {
                     }
                     HStack(spacing: 12) {
                         Button {
-                            watchlistStore.toggle(item)
+                            toggleLibrary()
                         } label: {
-                            Label(isSaved ? "Saved" : "Add to Library", systemImage: isSaved ? "checkmark" : "plus")
+                            Label(isSaved ? "Saved to Library" : "Add to Library", systemImage: isSaved ? "checkmark.circle.fill" : "plus.circle.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
+                        .contentShape(Rectangle())
 
                         Button {
                             Task { await loadStreams() }
@@ -48,6 +50,14 @@ struct CatalogItemDetailView: View {
                         .buttonStyle(.bordered)
                         .disabled(isLoading)
                     }
+
+                    if let libraryMessage {
+                        Label(libraryMessage, systemImage: isSaved ? "checkmark.circle.fill" : "bookmark.slash")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .transition(.opacity)
+                    }
+
                     if let status = addonStore.streamStatus {
                         Text(status)
                             .font(.footnote)
@@ -77,7 +87,7 @@ struct CatalogItemDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(isSaved ? "Saved" : "Save") {
-                        watchlistStore.toggle(item)
+                        toggleLibrary()
                     }
                 }
             }
@@ -87,6 +97,16 @@ struct CatalogItemDetailView: View {
                     PlayerView(url: stream.url, title: item.name, headers: stream.headers, posterURL: item.posterURL)
                 }
             }
+        }
+    }
+
+    private func toggleLibrary() {
+        withAnimation(.easeInOut(duration: 0.16)) {
+            watchlistStore.toggle(item)
+        }
+        libraryMessage = isSaved ? "Added to your Library" : "Removed from your Library"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            libraryMessage = nil
         }
     }
 
