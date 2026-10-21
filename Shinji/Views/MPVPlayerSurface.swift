@@ -40,6 +40,7 @@ struct MPVPlayerSurface: UIViewControllerRepresentable {
         player.onPlaybackUpdate = onPlaybackUpdate
         player.onTracks = onTracks
         player.setMuted(muted)
+        player.refreshVideoSurfaceLayout()
 
         guard commandID != context.coordinator.lastCommandID else { return }
         context.coordinator.lastCommandID = commandID
@@ -77,26 +78,64 @@ final class MPVMetalViewController: UIViewController {
     var onPlaybackUpdate: ((Double, Double, Bool) -> Void)?
     var onTracks: (([MPVPlayerTrack]) -> Void)?
 
+    override func loadView() {
+        let rootView = UIView(frame: .zero)
+        rootView.backgroundColor = .black
+        rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view = rootView
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        metalLayer.frame = view.bounds
-        metalLayer.contentsScale = UIScreen.main.nativeScale
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+
+        metalLayer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
         metalLayer.backgroundColor = UIColor.black.cgColor
+        metalLayer.contentsScale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
         metalLayer.framebufferOnly = true
         view.layer.addSublayer(metalLayer)
+        refreshVideoSurfaceLayout()
 
         setupMpv()
         if let url = playUrl { loadFile(url) }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        refreshVideoSurfaceLayout()
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        metalLayer.frame = view.bounds
+        refreshVideoSurfaceLayout()
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            self?.refreshVideoSurfaceLayout(for: size)
+        }, completion: { [weak self] _ in
+            self?.refreshVideoSurfaceLayout()
+        })
+    }
+
+    func refreshVideoSurfaceLayout(for targetSize: CGSize? = nil) {
+        guard isViewLoaded else { return }
+        let bounds = CGRect(origin: .zero, size: targetSize ?? view.bounds.size)
+        guard bounds.width > 1, bounds.height > 1 else { return }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        metalLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        metalLayer.bounds = CGRect(origin: .zero, size: bounds.size)
         metalLayer.contentsScale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
         let scale = metalLayer.contentsScale
-        let size = CGSize(width: max(1, view.bounds.width * scale), height: max(1, view.bounds.height * scale))
-        if size.width > 1 && size.height > 1 { metalLayer.drawableSize = size }
+        metalLayer.drawableSize = CGSize(
+            width: max(1, bounds.width * scale),
+            height: max(1, bounds.height * scale)
+        )
+        CATransaction.commit()
     }
 
     private func setupMpv() {
@@ -218,8 +257,6 @@ final class MPVMetalViewController: UIViewController {
                     self.publishPlaybackState(handle)
                     self.scheduleTrackRefresh()
                 case MPV_EVENT_PROPERTY_CHANGE:
-                    // Do not refresh the track list for every time-pos/pause update.
-                    // Those events fire continuously and can starve the debounced track refresh.
                     self.publishPlaybackState(handle)
                 case MPV_EVENT_END_FILE:
                     if let raw = event.pointee.data {
