@@ -89,6 +89,9 @@ jobs:
       - name: Repair iOS 16 compatibility
         run: python3 Scripts/fix_ios16_compatibility.py
 
+      - name: Finalize player rotation and video bounds
+        run: python3 Scripts/fix_player_rotation_final.py
+
       - name: Build app for device without signing
         run: |
           set -euo pipefail
