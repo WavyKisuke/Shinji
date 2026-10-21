@@ -28,6 +28,9 @@ jobs:
       - name: Repair known Swift source issues
         run: python3 Scripts/fix_build_source.py
 
+      - name: Remove obsolete Home watchlist block
+        run: python3 Scripts/fix_home_watchlist.py
+
       - name: Repair player controls
         run: python3 Scripts/fix_player_controls.py
 
