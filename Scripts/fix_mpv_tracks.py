@@ -36,7 +36,7 @@ if "struct MPVPlayerTrack: Identifiable, Hashable" not in m:
     model = '''struct MPVPlayerTrack: Identifiable, Hashable {
     let id: Int
     let title: String
-    let language: String?
+    let language: String
     let type: String
     let isSelected: Bool
 }
@@ -68,7 +68,7 @@ if "private func publishTracks(_ handle: OpaquePointer)" not in m:
             guard let type = stringProperty(handle, "\\(prefix)/type"), type == "audio" || type == "sub" else { continue }
             let id = intProperty(handle, "\\(prefix)/id") ?? (index + 1)
             let title = stringProperty(handle, "\\(prefix)/title") ?? ""
-            let language = stringProperty(handle, "\\(prefix)/lang")
+            let language = stringProperty(handle, "\\(prefix)/lang") ?? ""
             let selected = intProperty(handle, type == "audio" ? "aid" : "sid") == id
             tracks.append(MPVPlayerTrack(id: id, title: title, language: language, type: type, isSelected: selected))
         }
@@ -108,7 +108,6 @@ if "private func publishTracks(_ handle: OpaquePointer)" not in m:
         1,
 )
 else:
-    # Upgrade an existing bridge from a single FILE_LOADED refresh to retries.
     if "private func refreshTracksSoon" not in m:
         methods = '''    private func refreshTracksSoon(_ handle: OpaquePointer) {
         publishTracks(handle)
@@ -128,19 +127,17 @@ m = m.replace(
     '                    self.publishStatus("Stream loaded")\n                    self.refreshTracksSoon(handle)\n                    self.publishPlaybackState(handle)',
     1,
 )
-m = m.replace(
-    '                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)',
-    '                case MPV_EVENT_PROPERTY_CHANGE:\n                    self.publishTracks(handle)\n                    self.publishPlaybackState(handle)',
-    1,
-)
 
-# MPVKit's public headers do not expose MPV_EVENT_TRACKS_CHANGED. Track-list
-# changes are already covered by the observed track-list/count, aid and sid
-# properties plus the post-load retries above. Never emit an unavailable
-# enum reference into the generated Swift source.
 m = m.replace(
     '                case MPV_EVENT_TRACKS_CHANGED:\n                    self.refreshTracksSoon(handle)\n',
     '',
 )
+
+# Normalize any pre-existing generated bridge/model to a non-optional language.
+m = m.replace(
+    'let language = stringProperty(handle, "\\(prefix)/lang")\n',
+    'let language = stringProperty(handle, "\\(prefix)/lang") ?? ""\n',
+)
+m = m.replace('let language: String?\n', 'let language: String\n')
 
 path.write_text(m, encoding="utf-8")
