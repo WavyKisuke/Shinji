@@ -333,7 +333,7 @@ struct PlayerView: View {
     }
 
     private var bottomControls: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             VStack(spacing: 8) {
                 HStack(spacing: 10) {
                     Text(formatTime(position)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
@@ -396,6 +396,14 @@ struct PlayerView: View {
             .padding(.horizontal, 18)
             .padding(.bottom, 16)
         }
+        .padding(.top, 8)
+        .background(
+            LinearGradient(
+                colors: [.black.opacity(0.0), .black.opacity(0.08), .black.opacity(0.18), .black.opacity(0.28)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
 
     private func seekButton(seconds: Int) -> some View {
@@ -430,7 +438,7 @@ struct PlayerView: View {
             }
             .foregroundStyle(.white.opacity(0.92))
             .frame(width: 56, height: 46)
-            .background(.white.opacity(0.06), in: Capsule())
+            .background(.white.opacity(0.04), in: Capsule())
             .overlay(Capsule().stroke(Color.white.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(.plain)
