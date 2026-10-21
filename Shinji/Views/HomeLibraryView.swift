@@ -46,7 +46,7 @@ struct HomeLibraryView: View {
     private var heroSection: some View {
         if !heroItems.isEmpty {
             TabView(selection: $heroIndex) {
-                ForEach(Array(heroItems.enumerated()), id: \.element.id) { index, item in
+                ForEach(Array(heroItems.enumerated()), id: \ .element.id) { index, item in
                     NavigationLink {
                         CatalogItemDetailView(item: item)
                     } label: {
@@ -58,10 +58,11 @@ struct HomeLibraryView: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: 320)
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .shadow(color: .black.opacity(0.38), radius: 18, x: 0, y: 12)
             .overlay(alignment: .bottom) {
                 HStack(spacing: 6) {
-                    ForEach(0..<heroItems.count, id: \.self) { index in
+                    ForEach(0..<heroItems.count, id: \ .self) { index in
                         Capsule()
                             .fill(index == heroIndex ? Color.white : Color.white.opacity(0.35))
                             .frame(width: index == heroIndex ? 28 : 6, height: 4)
@@ -93,6 +94,7 @@ struct HomeLibraryView: View {
             } else {
                 heroPlaceholder(item)
             }
+
             LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0.18),
@@ -102,23 +104,44 @@ struct HomeLibraryView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.58)], startPoint: .topLeading, endPoint: .bottomTrailing)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("\(item.type.capitalized)  •  \(item.year ?? "")")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.82))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(item.type.capitalized)
+                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .tracking(1.8)
+                        .foregroundStyle(.white.opacity(0.78))
+                    Spacer()
+                    Text("TOP PICK")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .tracking(1.5)
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.white.opacity(0.9), in: Capsule())
+                }
                 Text(item.name)
                     .font(.system(size: 27, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.78)
-                Text("View Details")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 22)
-                    .frame(height: 38)
-                    .background(.white, in: Capsule())
+                Text(item.description ?? "Discover a new favorite tonight.")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.74))
+                    .lineLimit(2)
+                HStack(spacing: 10) {
+                    Text("View Details")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 22)
+                        .frame(height: 38)
+                        .background(.white, in: Capsule())
+                    if let year = item.year, !year.isEmpty {
+                        Text(year)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                }
             }
             .padding(.horizontal, 22)
             .padding(.bottom, 27)
@@ -128,7 +151,13 @@ struct HomeLibraryView: View {
 
     private func heroPlaceholder(_ item: AddonCatalogItem) -> some View {
         LinearGradient(colors: [Color(hex: glowHex), .black], startPoint: .topLeading, endPoint: .bottomTrailing)
-            .overlay { Text(item.name).font(.system(size: 32, weight: .black, design: .rounded)).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center).padding() }
+            .overlay {
+                Text(item.name)
+                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding()
+            }
     }
 
     @ViewBuilder
@@ -180,11 +209,18 @@ struct HomeLibraryView: View {
                 NavigationLink {
                     CatalogGridPage(title: title, items: destinationItems, accentHex: accentHex, glowHex: glowHex, onSelect: { _ in })
                 } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .frame(width: 34, height: 34)
-                        .background(Color.white.opacity(0.07), in: Circle())
+                    HStack(spacing: 6) {
+                        Text("See all")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.8))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.06), in: Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.09), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
@@ -194,8 +230,8 @@ struct HomeLibraryView: View {
 
     private func catalogCard(_ item: AddonCatalogItem) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Color.white.opacity(0.07))
+            ZStack(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.07))
                 if let url = item.posterURL {
                     AsyncImage(url: url) { phase in
                         if case .success(let image) = phase {
@@ -207,15 +243,27 @@ struct HomeLibraryView: View {
                 } else {
                     placeholder(for: item)
                 }
+
+                LinearGradient(colors: [.clear, .black.opacity(0.66)], startPoint: .center, endPoint: .bottom)
+                Text(item.type.lowercased() == "movie" ? "MOVIE" : "SERIES")
+                    .font(.system(size: 8, weight: .black, design: .rounded))
+                    .tracking(1.3)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.28), in: Capsule())
+                    .padding(10)
             }
             .frame(width: 132, height: 192)
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.25), radius: 14, x: 0, y: 10)
+
             Text(item.name)
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .frame(width: 132, alignment: .leading)
-            Text(item.year ?? "")
+            Text(item.year ?? "New")
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.48))
                 .frame(width: 132, alignment: .leading)
@@ -225,7 +273,11 @@ struct HomeLibraryView: View {
 
     private func placeholder(for item: AddonCatalogItem) -> some View {
         LinearGradient(colors: [Color(hex: glowHex), Color(hex: accentHex).opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            .overlay { Image(systemName: item.type.lowercased() == "movie" ? "film" : "tv").font(.system(size: 34, weight: .light)).foregroundStyle(.white.opacity(0.7)) }
+            .overlay {
+                Image(systemName: item.type.lowercased() == "movie" ? "film" : "tv")
+                    .font(.system(size: 34, weight: .light))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
     }
 
     private func continueCard(_ entry: ContinueWatchingItem) -> some View {
@@ -236,7 +288,7 @@ struct HomeLibraryView: View {
         } label: {
             HStack(spacing: 11) {
                 ZStack(alignment: .bottom) {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.08))
                     if let rawPoster = entry.posterURL, let poster = URL(string: rawPoster) {
                         AsyncImage(url: poster) { phase in
                             if case .success(let image) = phase {
@@ -247,7 +299,7 @@ struct HomeLibraryView: View {
                         }
                     }
                     Capsule()
-                        .fill(Color.white.opacity(0.22))
+                        .fill(Color.white.opacity(0.18))
                         .frame(height: 3)
                         .padding(.horizontal, 7)
                         .overlay(alignment: .leading) {
@@ -258,7 +310,7 @@ struct HomeLibraryView: View {
                         }
                 }
                 .frame(width: 86, height: 122)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text("NOW WATCHING")
@@ -272,18 +324,25 @@ struct HomeLibraryView: View {
                     Text(remainingText(entry))
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.55))
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 30, height: 30)
-                        .background(Color.white.opacity(0.10), in: Circle())
+                    HStack(spacing: 7) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                        Text("Resume")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.82))
+                    }
+                    .frame(height: 30)
+                    .padding(.horizontal, 9)
+                    .background(Color.white.opacity(0.08), in: Capsule())
                 }
                 .frame(width: 145, alignment: .leading)
             }
             .frame(width: 255, height: 122, alignment: .leading)
             .padding(10)
-            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(Color.white.opacity(0.07), lineWidth: 1))
+            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 6)
         }
         .buttonStyle(.plain)
     }
