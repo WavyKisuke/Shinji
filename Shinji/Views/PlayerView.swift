@@ -136,7 +136,6 @@ struct PlayerView: View {
     private func toggleControls() {
         guard playbackError == nil else { return }
         if controlsLocked {
-            // While locked, a tap only reveals/hides the unlock button; it never unlocks.
             withAnimation(.easeInOut(duration: 0.18)) { showUnlockButton.toggle() }
             if showUnlockButton { scheduleHide() } else { hideControlsTask?.cancel() }
             return
@@ -203,7 +202,7 @@ struct PlayerView: View {
     private func controlsOverlay() -> some View {
         ZStack {
             LinearGradient(
-                colors: [.black.opacity(0.52), .clear, .black.opacity(0.66)],
+                colors: [.black.opacity(0.62), .clear, .clear, .black.opacity(0.84)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -211,9 +210,9 @@ struct PlayerView: View {
 
             VStack(spacing: 0) {
                 topBar
-                Spacer()
+                Spacer(minLength: 0)
                 centerControls
-                Spacer()
+                Spacer(minLength: 0)
                 bottomControls
             }
         }
@@ -224,104 +223,114 @@ struct PlayerView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 42, height: 42)
-                    .background(.black.opacity(0.4), in: Circle())
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .background(.black.opacity(0.38), in: Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close player")
 
             if !isFullscreen {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline.weight(.semibold)).lineLimit(1)
+                    Text(title)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
                     Text(playbackDiagnostics)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.65))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            Button { isFullscreen.toggle() } label: {
-                Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 42, height: 42)
-                    .background(.black.opacity(0.4), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
+            HStack(spacing: 8) {
+                Button { isFullscreen.toggle() } label: {
+                    Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(.black.opacity(0.38), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isFullscreen ? "Exit fullscreen" : "Enter fullscreen")
 
-            Button {
-                lockControls()
-            } label: {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 42, height: 42)
-                    .background(.black.opacity(0.4), in: Circle())
+                Button { lockControls() } label: {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 40, height: 40)
+                        .background(.black.opacity(0.38), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Lock controls")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Lock controls")
         }
         .padding(.horizontal, 18)
-        .padding(.top, 14)
+        .padding(.top, 16)
     }
 
     private var centerControls: some View {
-        HStack(spacing: 46) {
+        HStack(spacing: 30) {
             seekButton(seconds: -10)
+
             Button {
                 sendCommand(["cycle", "pause"])
                 scheduleHide()
             } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 28, weight: .bold))
-                    .frame(width: 64, height: 64)
+                    .font(.system(size: 30, weight: .bold))
+                    .frame(width: 70, height: 70)
+                    .foregroundStyle(.white)
                     .background(.black.opacity(0.28), in: Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
+
             seekButton(seconds: 10)
         }
-        .shadow(radius: 8)
+        .shadow(color: .black.opacity(0.24), radius: 14, x: 0, y: 6)
     }
 
     private var bottomControls: some View {
-        VStack(spacing: 9) {
-            HStack(spacing: 10) {
-                Text(formatTime(position)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
-                Slider(
-                    value: Binding(
-                        get: { duration > 0 ? min(position, duration) : 0 },
-                        set: { newValue in
-                            guard duration > 0 else { return }
-                            position = newValue
-                        }
-                    ),
-                    in: 0...max(duration, 1),
-                    onEditingChanged: { editing in
-                        if editing {
-                            isScrubbing = true
-                            hideControlsTask?.cancel()
-                        } else {
-                            if duration > 0 {
-                                ignorePositionUpdatesUntil = Date().addingTimeInterval(0.7)
-                                sendCommand(["seek", String(position), "absolute"])
+        VStack(spacing: 12) {
+            VStack(spacing: 8) {
+                HStack(spacing: 10) {
+                    Text(formatTime(position)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.85))
+                    Slider(
+                        value: Binding(
+                            get: { duration > 0 ? min(position, duration) : 0 },
+                            set: { newValue in
+                                guard duration > 0 else { return }
+                                position = newValue
                             }
-                            isScrubbing = false
-                            scheduleHide()
+                        ),
+                        in: 0...max(duration, 1),
+                        onEditingChanged: { editing in
+                            if editing {
+                                isScrubbing = true
+                                hideControlsTask?.cancel()
+                            } else {
+                                if duration > 0 {
+                                    ignorePositionUpdatesUntil = Date().addingTimeInterval(0.7)
+                                    sendCommand(["seek", String(position), "absolute"])
+                                }
+                                isScrubbing = false
+                                scheduleHide()
+                            }
                         }
-                    }
-                )
-                .tint(.white)
-                .contentShape(Rectangle())
-                Text(formatTime(duration)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.86))
+                    )
+                    .tint(.white)
+                    .contentShape(Rectangle())
+                    Text(formatTime(duration)).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.85))
+                }
             }
+            .padding(.horizontal, 18)
 
-            HStack(spacing: 22) {
+            HStack(spacing: 10) {
                 bottomButton("waveform", "Audio") {
                     openTrackPicker(for: "audio")
                     scheduleHide()
@@ -337,12 +346,14 @@ struct PlayerView: View {
                     scheduleHide()
                 }
                 bottomButton("gearshape", "Settings") { showSettings = true }
-                Spacer()
-                Text("Shinji").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.5))
+                Spacer(minLength: 0)
+                Text("Shinji")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.55))
             }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 16)
         }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 18)
     }
 
     private func seekButton(seconds: Int) -> some View {
@@ -359,8 +370,9 @@ struct PlayerView: View {
                     .font(.system(size: 24, weight: .semibold))
                 Text("10").font(.system(size: 8, weight: .bold)).offset(y: 1)
             }
-            .frame(width: 54, height: 54)
+            .frame(width: 58, height: 58)
             .background(.black.opacity(0.3), in: Circle())
+            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -368,10 +380,15 @@ struct PlayerView: View {
 
     private func bottomButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 17, weight: .medium))
-                .frame(width: 42, height: 42)
-                .contentShape(Rectangle())
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .medium))
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(.white.opacity(0.9))
+            .frame(width: 56, height: 46)
+            .background(.black.opacity(0.28), in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
