@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeLibraryView: View {
     @EnvironmentObject private var addonStore: AddonStore
-    @StateObject private var continueStore = ContinueWatchingStore.shared // keep Home focused on playback history
+    @StateObject private var continueStore = ContinueWatchingStore.shared
     @State private var selectedEntry: ContinueWatchingItem?
     @State private var showPlayer = false
     @State private var heroIndex = 0
@@ -20,13 +20,13 @@ struct HomeLibraryView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 30) {
+                LazyVStack(alignment: .leading, spacing: 28) {
                     heroSection
-                    keepWatchingSection // keep Home focused on playback history
-                    catalogSection(title: "Popular - Movies", items: popularMovies)
-                    catalogSection(title: "Popular - Series", items: popularSeries)
-                    catalogSection(title: "Featured - Movies", items: featuredMovies)
-                    catalogSection(title: "Featured - Series", items: featuredSeries)
+                    keepWatchingSection
+                    catalogSection(title: "Popular Movies", items: popularMovies)
+                    catalogSection(title: "Popular Series", items: popularSeries)
+                    catalogSection(title: "Featured Movies", items: featuredMovies)
+                    catalogSection(title: "Featured Series", items: featuredSeries)
                 }
                 .padding(.bottom, 105)
             }
@@ -57,59 +57,92 @@ struct HomeLibraryView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 315)
+            .frame(height: 320)
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .overlay(alignment: .bottom) {
-                HStack(spacing: 7) {
+                HStack(spacing: 6) {
                     ForEach(0..<heroItems.count, id: \.self) { index in
-                        Capsule().fill(index == heroIndex ? Color.white : Color.white.opacity(0.72))
-                            .frame(width: index == heroIndex ? 46 : 8, height: 5)
+                        Capsule()
+                            .fill(index == heroIndex ? Color.white : Color.white.opacity(0.35))
+                            .frame(width: index == heroIndex ? 28 : 6, height: 4)
                     }
                 }
-                .padding(.bottom, 14)
+                .padding(.bottom, 13)
+            }
+            .padding(.horizontal, 14)
+            .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
+                guard heroItems.count > 1 else { return }
+                withAnimation(.easeInOut(duration: 0.55)) {
+                    heroIndex = (heroIndex + 1) % heroItems.count
+                }
             }
         }
     }
 
     private func heroCard(_ item: AddonCatalogItem) -> some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .bottomLeading) {
             Color.black
             if let url = item.posterURL {
                 AsyncImage(url: url) { phase in
-                    if case .success(let image) = phase { image.resizable().scaledToFill() }
-                    else { heroPlaceholder(item) }
+                    if case .success(let image) = phase {
+                        image.resizable().interpolation(.high).scaledToFill()
+                    } else {
+                        heroPlaceholder(item)
+                    }
                 }
-            } else { heroPlaceholder(item) }
-            LinearGradient(stops: [
-                .init(color: .clear, location: 0.20),
-                .init(color: .black.opacity(0.25), location: 0.48),
-                .init(color: .black.opacity(0.94), location: 1)
-            ], startPoint: .top, endPoint: .bottom)
-            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.72)], startPoint: .leading, endPoint: .trailing)
-            VStack(spacing: 10) {
-                Text("\(item.type.capitalized)  •  \(item.year ?? "")")
-                    .font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                Text("View Details")
-                    .font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(.black)
-                    .padding(.horizontal, 31).frame(height: 44).background(.white, in: Capsule())
+            } else {
+                heroPlaceholder(item)
             }
-            .padding(.bottom, 28)
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.18),
+                    .init(color: .black.opacity(0.12), location: 0.40),
+                    .init(color: .black.opacity(0.94), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.58)], startPoint: .topLeading, endPoint: .bottomTrailing)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("\(item.type.capitalized)  •  \(item.year ?? "")")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.82))
+                Text(item.name)
+                    .font(.system(size: 27, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.78)
+                Text("View Details")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 22)
+                    .frame(height: 38)
+                    .background(.white, in: Capsule())
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 27)
         }
         .clipped()
     }
 
     private func heroPlaceholder(_ item: AddonCatalogItem) -> some View {
         LinearGradient(colors: [Color(hex: glowHex), .black], startPoint: .topLeading, endPoint: .bottomTrailing)
-            .overlay { Text(item.name).font(.system(size: 36, weight: .black, design: .rounded)).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center).padding() }
+            .overlay { Text(item.name).font(.system(size: 32, weight: .black, design: .rounded)).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center).padding() }
     }
 
     @ViewBuilder
     private var keepWatchingSection: some View {
         if !continueStore.items.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("Continue Watching", showArrow: false)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) { ForEach(continueStore.items) { entry in continueCard(entry) } }
-                        .padding(.horizontal, 26)
+                    HStack(spacing: 12) {
+                        ForEach(continueStore.items) { entry in
+                            continueCard(entry)
+                        }
+                    }
+                    .padding(.horizontal, 18)
                 }
             }
         }
@@ -118,10 +151,10 @@ struct HomeLibraryView: View {
     @ViewBuilder
     private func catalogSection(title: String, items: [AddonCatalogItem]) -> some View {
         if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(title, showArrow: true, destinationItems: items)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 16) {
+                    HStack(alignment: .top, spacing: 14) {
                         ForEach(items) { item in
                             NavigationLink {
                                 CatalogItemDetailView(item: item)
@@ -131,74 +164,128 @@ struct HomeLibraryView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal, 26)
+                    .padding(.horizontal, 18)
                 }
             }
         }
     }
 
     private func sectionTitle(_ title: String, showArrow: Bool, destinationItems: [AddonCatalogItem] = []) -> some View {
-        HStack {
-            Text(title).font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(.white)
+        HStack(alignment: .center) {
+            Text(title)
+                .font(.system(size: 21, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
             Spacer()
             if showArrow {
                 NavigationLink {
                     CatalogGridPage(title: title, items: destinationItems, accentHex: accentHex, glowHex: glowHex, onSelect: { _ in })
                 } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold)).foregroundStyle(.white.opacity(0.75))
-                        .frame(width: 54, height: 54).background(Color.white.opacity(0.07), in: Circle())
-                }.buttonStyle(.plain)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .frame(width: 34, height: 34)
+                        .background(Color.white.opacity(0.07), in: Circle())
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 26)
+        .padding(.horizontal, 18)
     }
 
     private func catalogCard(_ item: AddonCatalogItem) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 7) {
             ZStack {
-                RoundedRectangle(cornerRadius: 17, style: .continuous).fill(Color.white.opacity(0.07))
+                RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Color.white.opacity(0.07))
                 if let url = item.posterURL {
                     AsyncImage(url: url) { phase in
-                        if case .success(let image) = phase { image.resizable().scaledToFill() } else { placeholder(for: item) }
+                        if case .success(let image) = phase {
+                            image.resizable().interpolation(.high).scaledToFill()
+                        } else {
+                            placeholder(for: item)
+                        }
                     }
-                } else { placeholder(for: item) }
+                } else {
+                    placeholder(for: item)
+                }
             }
-            .frame(width: 145, height: 210)
-            .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
-            Text(item.name).font(.system(size: 16, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(1).frame(width: 145, alignment: .leading)
-            Text(item.year ?? "").font(.system(size: 14, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.52)).frame(width: 145, alignment: .leading)
+            .frame(width: 132, height: 192)
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            Text(item.name)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .frame(width: 132, alignment: .leading)
+            Text(item.year ?? "")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.48))
+                .frame(width: 132, alignment: .leading)
         }
-        .frame(width: 145, alignment: .leading)
+        .frame(width: 132, alignment: .leading)
     }
 
     private func placeholder(for item: AddonCatalogItem) -> some View {
         LinearGradient(colors: [Color(hex: glowHex), Color(hex: accentHex).opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            .overlay { Image(systemName: item.type.lowercased() == "movie" ? "film" : "tv").font(.system(size: 36, weight: .light)).foregroundStyle(.white.opacity(0.7)) }
+            .overlay { Image(systemName: item.type.lowercased() == "movie" ? "film" : "tv").font(.system(size: 34, weight: .light)).foregroundStyle(.white.opacity(0.7)) }
     }
 
     private func continueCard(_ entry: ContinueWatchingItem) -> some View {
         let progress = entry.duration > 0 ? min(max(entry.position / entry.duration, 0), 1) : 0
         return Button {
-            selectedEntry = entry; showPlayer = true
+            selectedEntry = entry
+            showPlayer = true
         } label: {
-            ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.08))
-                if let rawPoster = entry.posterURL, let poster = URL(string: rawPoster) {
-                    AsyncImage(url: poster) { phase in
-                        if case .success(let image) = phase { image.resizable().scaledToFill() } else { Color.white.opacity(0.06) }
+            HStack(spacing: 11) {
+                ZStack(alignment: .bottom) {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.08))
+                    if let rawPoster = entry.posterURL, let poster = URL(string: rawPoster) {
+                        AsyncImage(url: poster) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().interpolation(.high).scaledToFill()
+                            } else {
+                                Color.white.opacity(0.06)
+                            }
+                        }
                     }
+                    Capsule()
+                        .fill(Color.white.opacity(0.22))
+                        .frame(height: 3)
+                        .padding(.horizontal, 7)
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(.white)
+                                .frame(width: max(0, 76 * progress), height: 3)
+                                .padding(.leading, 7)
+                        }
                 }
-                LinearGradient(colors: [.clear, .black.opacity(0.92)], startPoint: .center, endPoint: .bottom)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(entry.title).font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-                    Text(remainingText(entry)).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.72))
-                    GeometryReader { geo in
-                        Capsule().fill(Color.white.opacity(0.22)).overlay(alignment: .leading) { Capsule().fill(.white).frame(width: geo.size.width * progress) }
-                    }.frame(height: 3)
-                }.padding(13)
+                .frame(width: 86, height: 122)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("NOW WATCHING")
+                        .font(.system(size: 9, weight: .black, design: .rounded))
+                        .tracking(1.1)
+                        .foregroundStyle(.white.opacity(0.45))
+                    Text(entry.title)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    Text(remainingText(entry))
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.55))
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Color.white.opacity(0.10), in: Circle())
+                }
+                .frame(width: 145, alignment: .leading)
             }
-            .frame(width: 255, height: 143).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }.buttonStyle(.plain)
+            .frame(width: 255, height: 122, alignment: .leading)
+            .padding(10)
+            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(Color.white.opacity(0.07), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private func remainingText(_ entry: ContinueWatchingItem) -> String {
