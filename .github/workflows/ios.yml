@@ -67,6 +67,9 @@ jobs:
       - name: Repair search and search history
         run: python3 Scripts/fix_search.py
 
+      - name: Repair Stremio addon stream sources
+        run: python3 Scripts/fix_addon_stream_sources.py
+
       - name: Repair Featured Picks page
         run: python3 Scripts/fix_featured_page.py
 
