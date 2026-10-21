@@ -110,6 +110,35 @@ final class AddonStore: ObservableObject {
         }
     }
 
+    func searchCatalogs(query: String, typeFilter: String = "All") async -> [AddonCatalogItem] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        var loaded: [AddonCatalogItem] = []
+        for addon in addons {
+            guard addon.format == "Stremio", let manifestURL = addon.manifestURL else { continue }
+            do {
+                let manifestData = try await fetchJSON(from: manifestURL)
+                for descriptor in parseCatalogs(from: manifestData) {
+                    if typeFilter == "Movies" && descriptor.type.lowercased() != "movie" { continue }
+                    if typeFilter == "Shows" && descriptor.type.lowercased() != "series" { continue }
+                    guard let url = catalogURL(base: manifestURL, descriptor: descriptor, search: trimmed) else { continue }
+                    do {
+                        let data = try await fetchJSON(from: url)
+                        loaded.append(contentsOf: parseMetas(from: data, type: descriptor.type, addonName: addon.name))
+                    } catch {
+                        // Keep searching other catalogs if one source does not support search.
+                    }
+                }
+            } catch {
+                // Keep other installed add-ons usable.
+            }
+        }
+
+        var seen = Set<String>()
+        return loaded.filter { seen.insert("\($0.type)|\($0.id)").inserted }
+    }
+
     func loadStreams(for item: AddonCatalogItem) async {
         streamOptions = []
         isLoadingStreams = true
@@ -217,12 +246,18 @@ final class AddonStore: ObservableObject {
         }
     }
 
-    private func catalogURL(base: URL, descriptor: StremioCatalogDescriptor) -> URL? {
+    private func catalogURL(base: URL, descriptor: StremioCatalogDescriptor, search: String? = nil) -> URL? {
         guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
         let safeType = descriptor.type.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? descriptor.type
         let safeID = descriptor.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? descriptor.id
         let prefix = addonPathPrefix(components.path)
-        components.path = prefix + "catalog/\(safeType)/\(safeID).json"
+        var path = prefix + "catalog/\(safeType)/\(safeID)"
+        if let search, !search.isEmpty {
+            let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+            let safeSearch = search.addingPercentEncoding(withAllowedCharacters: allowed) ?? search
+            path += "/search=\(safeSearch)"
+        }
+        components.path = path + ".json"
         return components.url
     }
 
@@ -259,19 +294,13 @@ final class AddonStore: ObservableObject {
         }
     }
 
-    private func safeMessage(_ error: Error) -> String {
-        // Avoid echoing full URLs, which may contain private source tokens.
-        if let addonError = error as? AddonError {
-            switch addonError {
-            case .duplicate(let name): return "\(name) is already installed."
-            default: return addonError.localizedDescription
-            }
-        }
-        return error.localizedDescription
-    }
-
     private func saveAddons() {
         guard let data = try? JSONEncoder().encode(addons) else { return }
         UserDefaults.standard.set(data, forKey: storageKey)
+    }
+
+    private func safeMessage(_ error: Error) -> String {
+        if let addonError = error as? AddonError { return addonError.localizedDescription }
+        return "The add-on request failed. Please check the manifest URL and try again."
     }
 }
