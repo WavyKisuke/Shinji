@@ -21,4 +21,17 @@ new = '''                    VStack(spacing: 10) {
 if old in text:
     text = text.replace(old, new)
 path.write_text(text, encoding="utf-8")
-print("iOS 16 compatibility repair applied.")
+
+# Final CI normalization: MPV's language property is optional, while the
+# player track model exposes a displayable String. Keep the generated bridge
+# stable even if an earlier repair script regenerates this section.
+mpv_path = Path("Shinji/Views/MPVPlayerSurface.swift")
+mpv = mpv_path.read_text(encoding="utf-8")
+mpv = mpv.replace(
+    'let language = stringProperty(handle, "\\(prefix)/lang")\n',
+    'let language = stringProperty(handle, "\\(prefix)/lang") ?? ""\n',
+)
+mpv = mpv.replace('let language: String?\n', 'let language: String\n')
+mpv_path.write_text(mpv, encoding="utf-8")
+
+print("iOS 16 compatibility and MPV track bridge normalization applied.")
