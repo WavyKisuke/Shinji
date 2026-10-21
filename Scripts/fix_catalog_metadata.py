@@ -42,5 +42,30 @@ if "genres: genres," not in text:
         1,
     )
 
+# Prefer the original/full TMDB artwork when an add-on supplied a small TMDB
+# poster variant such as w342 or w500. Other image hosts are left untouched.
+if "func highQualityPosterURL" not in text:
+    marker = "    private func parseMetas(from data: Data, type: String, addonName: String) -> [AddonCatalogItem] {\n"
+    helper = '''    private func highQualityPosterURL(_ url: URL) -> URL {
+        guard url.host?.lowercased() == "image.tmdb.org" else { return url }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        guard var path = components?.path else { return url }
+        let sizes = ["w92", "w154", "w185", "w342", "w500", "w780"]
+        for size in sizes {
+            path = path.replacingOccurrences(of: "/\\(size)/", with: "/original/")
+        }
+        components?.path = path
+        return components?.url ?? url
+    }
+
+'''
+    text = text.replace(marker, helper + marker, 1)
+
+text = text.replace(
+    '            let poster = (meta["poster"] as? String).flatMap(URL.init(string))',
+    '            let poster = (meta["poster"] as? String).flatMap(URL.init(string)).map(highQualityPosterURL)',
+    1,
+)
+
 path.write_text(text, encoding="utf-8")
-print("Catalog year/genre metadata ensured.")
+print("Catalog year/genre metadata and high-quality TMDB poster sources ensured.")
