@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeLibraryView: View {
     @EnvironmentObject private var addonStore: AddonStore
-    @StateObject private var continueStore = ContinueWatchingStore.shared
+    @StateObject private var continueStore = ContinueWatchingStore.shared // keep Home focused on playback history
     @State private var selectedEntry: ContinueWatchingItem?
     @State private var showPlayer = false
     @State private var heroIndex = 0
@@ -22,7 +22,7 @@ struct HomeLibraryView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 34) {
                     heroSection
-                    keepWatchingSection
+                    keepWatchingSection // keep Home focused on playback history
                     catalogSection(title: "Popular - Movies", items: popularMovies)
                     catalogSection(title: "Popular - Series", items: popularSeries)
                     catalogSection(title: "Featured - Movies", items: featuredMovies)
