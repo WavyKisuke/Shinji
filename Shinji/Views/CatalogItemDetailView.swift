@@ -19,139 +19,66 @@ struct CatalogItemDetailView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     poster
-                    Text(item.name)
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text(metadata)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.55))
+                    Text(item.name).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                    Text(metadata).font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.55))
                     if let description = item.description, !description.isEmpty {
-                        Text(description)
-                            .font(.body)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .fixedSize(horizontal: false, vertical: true)
+                        Text(description).font(.body).foregroundStyle(.white.opacity(0.78)).fixedSize(horizontal: false, vertical: true)
                     }
                     HStack(spacing: 12) {
-                        Button {
-                            toggleLibrary()
-                        } label: {
-                            Label(isSaved ? "Saved to Library" : "Add to Library", systemImage: isSaved ? "checkmark.circle.fill" : "plus.circle.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .contentShape(Rectangle())
-
-                        Button {
-                            Task { await loadStreams() }
-                        } label: {
-                            Label(isLoading ? "Finding…" : "Play", systemImage: "play.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(isLoading)
+                        Button { toggleLibrary() } label: {
+                            Label(isSaved ? "Saved to Library" : "Add to Library", systemImage: isSaved ? "checkmark.circle.fill" : "plus.circle.fill").frame(maxWidth: .infinity)
+                        }.buttonStyle(.borderedProminent).contentShape(Rectangle())
+                        Button { Task { await loadStreams() } } label: {
+                            Label(isLoading ? "Finding…" : "Play", systemImage: "play.fill").frame(maxWidth: .infinity)
+                        }.buttonStyle(.bordered).disabled(isLoading)
                     }
-
                     if let libraryMessage {
-                        Label(libraryMessage, systemImage: isSaved ? "checkmark.circle.fill" : "bookmark.slash")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.72))
-                            .transition(.opacity)
+                        Label(libraryMessage, systemImage: isSaved ? "checkmark.circle.fill" : "bookmark.slash").font(.footnote.weight(.semibold)).foregroundStyle(.white.opacity(0.72))
                     }
-
                     if let status = addonStore.streamStatus {
-                        Text(status)
-                            .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.55))
+                        Text(status).font(.footnote).foregroundStyle(.white.opacity(0.55))
                     }
                     if !addonStore.streamOptions.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Sources")
-                                .font(.headline)
-                                .foregroundStyle(.white)
+                            Text("Sources").font(.headline).foregroundStyle(.white)
                             ForEach(addonStore.streamOptions) { stream in
-                                Button(stream.title) {
-                                    selectedStream = stream
-                                    showPlayer = true
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(14)
-                                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                                Button(stream.title) { selectedStream = stream; showPlayer = true }
+                                    .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
                             }
                         }
                     }
-                }
-                .padding(20)
-                .padding(.bottom, 30)
+                }.padding(20).padding(.bottom, 30)
             }
             .background(Color.black.ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(isSaved ? "Saved" : "Save") {
-                        toggleLibrary()
-                    }
-                }
-            }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(isSaved ? "Saved" : "Save") { toggleLibrary() } } }
             .preferredColorScheme(.dark)
             .fullScreenCover(isPresented: $showPlayer) {
                 if let stream = selectedStream {
-                    PlayerView(url: stream.url, title: item.name, headers: stream.headers, posterURL: item.posterURL)
+                    PlayerView(url: stream.url, title: item.name, headers: stream.headers, posterURL: item.posterURL, addonAudioTracks: stream.audioTracks, addonSubtitleTracks: stream.subtitles)
                 }
             }
         }
     }
 
     private func toggleLibrary() {
-        withAnimation(.easeInOut(duration: 0.16)) {
-            watchlistStore.toggle(item)
-        }
+        withAnimation(.easeInOut(duration: 0.16)) { watchlistStore.toggle(item) }
         libraryMessage = isSaved ? "Added to your Library" : "Removed from your Library"
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-            libraryMessage = nil
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { libraryMessage = nil }
     }
 
     private var poster: some View {
-        Group {
-            if let url = item.posterURL {
-                AsyncImage(url: url) { phase in
-                    if case .success(let image) = phase {
-                        image.resizable().scaledToFill()
-                    } else {
-                        placeholder
-                    }
-                }
-            } else {
-                placeholder
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 430)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        Group { if let url = item.posterURL { AsyncImage(url: url) { phase in if case .success(let image) = phase { image.resizable().scaledToFill() } else { placeholder } } } else { placeholder } }
+            .frame(maxWidth: .infinity).frame(height: 430).clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
-
     private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(Color.white.opacity(0.08))
-            .overlay {
-                Image(systemName: item.type.lowercased() == "movie" ? "film" : "tv")
-                    .font(.system(size: 52, weight: .light))
-                    .foregroundStyle(.white.opacity(0.55))
-            }
+        RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.white.opacity(0.08)).overlay { Image(systemName: item.type.lowercased() == "movie" ? "film" : "tv").font(.system(size: 52, weight: .light)).foregroundStyle(.white.opacity(0.55)) }
     }
-
-    private var metadata: String {
-        [item.type.capitalized, item.year, item.addonName]
-            .compactMap { $0 }
-            .joined(separator: "  •  ")
-    }
-
+    private var metadata: String { [item.type.capitalized, item.year, item.addonName].compactMap { $0 }.joined(separator: "  •  ") }
     private func loadStreams() async {
         isLoading = true
         await addonStore.loadStreams(for: item)
         isLoading = false
-        if let first = addonStore.streamOptions.first {
-            selectedStream = first
-            showPlayer = true
-        }
+        if let first = addonStore.streamOptions.first { selectedStream = first; showPlayer = true }
     }
 }
