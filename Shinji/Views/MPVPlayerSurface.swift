@@ -148,7 +148,12 @@ final class MPVMetalViewController: UIViewController {
 
         var layerReference: Int64 = Int64(Int(bitPattern: Unmanaged.passUnretained(metalLayer).toOpaque()))
         _ = mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &layerReference)
-        _ = mpv_set_option_string(handle, "vo", "gpu-next")
+
+        // Use mpv's established GPU renderer for the iOS/MoltenVK path.
+        // gpu-next has known color-management issues on some HDR/Dolby Vision
+        // streams and can produce a washed-out/grey image. The legacy gpu
+        // renderer keeps the VideoToolbox -> MoltenVK color path stable.
+        _ = mpv_set_option_string(handle, "vo", "gpu")
         _ = mpv_set_option_string(handle, "gpu-api", "vulkan")
         _ = mpv_set_option_string(handle, "gpu-context", "moltenvk")
         _ = mpv_set_option_string(handle, "hwdec", "videotoolbox")
